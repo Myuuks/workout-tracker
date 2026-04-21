@@ -683,7 +683,7 @@ function ExCard({ ex, color, state, dispatch, onTips, onSerie }) {
       {rm1 && <div style={{fontSize:11,color:"#444",textAlign:"right",padding:"4px 0"}}>1RM estimé ~<span style={{color:color+"bb",fontWeight:700}}>{rm1} kg</span></div>}
       <button
         disabled={allDone}
-        onClick={() => !allDone && onSerie(ex.id)}
+        onClick={() => !allDone && onSerie(ex.id, done + 1 >= s)}
         style={{width:"100%",marginTop:10,padding:12,borderRadius:10,border:"none",background:allDone?"#1a1a28":color+"22",color:allDone?"#333":color,fontFamily:"inherit",fontSize:14,fontWeight:800,cursor:allDone?"default":"pointer",touchAction:"manipulation",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
       >
         {allDone ? "✅ Exercice terminé" : "🔁 Série "+(done+1)+"/"+s+" terminée → Repos 90s"}
@@ -884,9 +884,9 @@ function WorkoutTracker() {
           <div style={{padding:"10px 14px 0",display:"flex",flexDirection:"column",gap:10}}>
             {day.exercises.map(ex => (
               <ExCard key={ex.id} ex={ex} color={color} state={state} dispatch={dispatch} onTips={setTipsTarget}
-                onSerie={id => {
+                onSerie={(id, isLastSet) => {
                   dispatch({type:"SERIE", id});
-                  dispatch({type:"START_TIMER", timer:{endTime:Date.now()+90000, label:"Entre séries", paused:false, pausedRemaining:null}});
+                  if (!isLastSet) dispatch({type:"START_TIMER", timer:{endTime:Date.now()+90000, label:"Entre séries", paused:false, pausedRemaining:null}});
                 }}
               />
             ))}
