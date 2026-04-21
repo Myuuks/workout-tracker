@@ -352,13 +352,44 @@ const B = (c) => ({
   fontFamily:"inherit", touchAction:"manipulation",
 });
 
-function Counter({ label, value, onDec, onInc, unit, color, valueColor }) {
+function Counter({ label, value, onDec, onInc, unit, color, valueColor, onEdit }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef(null);
+
+  const startEdit = () => {
+    if (!onEdit) return;
+    setDraft(String(value));
+    setEditing(true);
+    setTimeout(() => { inputRef.current?.select(); }, 50);
+  };
+  const commitEdit = () => {
+    const n = parseFloat(draft.replace(",", "."));
+    if (!isNaN(n) && n >= 0) onEdit(Math.round(n * 10) / 10);
+    setEditing(false);
+  };
+
   return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #1a1a28"}}>
       <span style={{fontSize:13,color:"#888",flex:1}}>{label}</span>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <button onClick={onDec} style={B(color)}>−</button>
-        <span style={{fontSize:22,fontWeight:800,color:valueColor||"#fff",minWidth:42,textAlign:"center"}}>{value}</span>
+        {editing ? (
+          <input
+            ref={inputRef}
+            type="number"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
+            style={{fontSize:22,fontWeight:800,color:valueColor||"#fff",width:64,textAlign:"center",background:"#1e1e2e",border:"1.5px solid "+color,borderRadius:8,outline:"none",fontFamily:"inherit",padding:"2px 4px"}}
+          />
+        ) : (
+          <span
+            onClick={startEdit}
+            style={{fontSize:22,fontWeight:800,color:valueColor||"#fff",minWidth:42,textAlign:"center",cursor:onEdit?"pointer":"default",borderBottom:onEdit?"1.5px dashed "+color+"55":"none",paddingBottom:onEdit?1:0}}
+          >{value}</span>
+        )}
         <button onClick={onInc} style={B(color)}>+</button>
       </div>
       <span style={{fontSize:12,color:"#555",width:34,textAlign:"right"}}>{unit}</span>
@@ -669,7 +700,7 @@ function ExCard({ ex, color, state, dispatch, onTips, onSerie }) {
       {canProgress && !allDone && (
         <div style={{marginBottom:8,padding:"7px 10px",borderRadius:8,background:"#10b98112",border:"1px solid #10b98130",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{fontSize:11,color:"#10b981"}}>💡 Tu peux progresser !</span>
-          <button onClick={() => dispatch({type:"SET_W",id:ex.id,val:w+2.5})} style={{padding:"3px 10px",borderRadius:6,background:"#10b98125",border:"1px solid #10b98155",color:"#10b981",fontSize:12,fontWeight:800,cursor:"pointer"}}>+2,5 kg</button>
+          <button onClick={() => dispatch({type:"SET_W",id:ex.id,val:w+1})} style={{padding:"3px 10px",borderRadius:6,background:"#10b98125",border:"1px solid #10b98155",color:"#10b981",fontSize:12,fontWeight:800,cursor:"pointer"}}>+1 kg</button>
         </div>
       )}
       {isRegress && !allDone && (
@@ -679,7 +710,7 @@ function ExCard({ ex, color, state, dispatch, onTips, onSerie }) {
       )}
       <Counter label="Séries" value={s} onDec={() => dispatch({type:"SET_S",id:ex.id,val:Math.max(1,s-1)})} onInc={() => dispatch({type:"SET_S",id:ex.id,val:s+1})} unit="" color={color}/>
       <Counter label="Reps"   value={r} onDec={() => dispatch({type:"SET_R",id:ex.id,val:Math.max(1,r-1)})} onInc={() => dispatch({type:"SET_R",id:ex.id,val:r+1})} unit="" color={color}/>
-      <Counter label="Poids"  value={w} onDec={() => dispatch({type:"SET_W",id:ex.id,val:Math.max(0,w-2.5)})} onInc={() => dispatch({type:"SET_W",id:ex.id,val:w+2.5})} unit="kg" color={color} valueColor={color}/>
+      <Counter label="Poids"  value={w} onDec={() => dispatch({type:"SET_W",id:ex.id,val:Math.max(0,w-1)})} onInc={() => dispatch({type:"SET_W",id:ex.id,val:w+1})} unit="kg" color={color} valueColor={color} onEdit={v => dispatch({type:"SET_W",id:ex.id,val:v})}/>
       {rm1 && <div style={{fontSize:11,color:"#444",textAlign:"right",padding:"4px 0"}}>1RM estimé ~<span style={{color:color+"bb",fontWeight:700}}>{rm1} kg</span></div>}
       <button
         disabled={allDone}
