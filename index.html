@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Suivi Muscu — Thomas 💪</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; background: #0c0c14; }
+    ::-webkit-scrollbar { width: 3px; height: 3px; }
+    ::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect, useRef, useReducer, useCallback } = React;
+
+const PROGRAM = {
+  Lundi:    { label:"🦵 Jambes",        color:"#f97316", training:true,
+    exercises:[
+      {id:"l_warmup",   name:"Tapis — Échauffement",  type:"cardio", defDur:10, defSpd:5},
+      {id:"leg_press",  name:"Leg Press XR.141",       type:"muscu",  defW:45},
+      {id:"leg_ext",    name:"Leg Extension",          type:"muscu",  defW:22},
+      {id:"leg_curl",   name:"Leg Curling",            type:"muscu",  defW:22},
+      {id:"calf",       name:"Calf Machine",           type:"muscu",  defW:35},
+      {id:"l_cooldown", name:"Tapis — Fin de séance",  type:"cardio", defDur:10, defSpd:6},
+    ]},
+  Mardi:    { label:"💪 Haut Push",     color:"#3b82f6", training:true,
+    exercises:[
+      {id:"ma_warmup",      name:"Tapis — Échauffement",  type:"cardio", defDur:10, defSpd:5},
+      {id:"chest_press",    name:"Chest Press",           type:"muscu",  defW:10},
+      {id:"incline_chest",  name:"Incline Chest Press",   type:"muscu",  defW:8},
+      {id:"shoulder_press", name:"Shoulder Press",        type:"muscu",  defW:10},
+      {id:"triceps_ext",    name:"Extension Triceps",     type:"muscu",  defW:17},
+      {id:"ma_cooldown",    name:"Tapis — Fin de séance", type:"cardio", defDur:10, defSpd:6},
+    ]},
+  Mercredi: { label:"🔥 Cardio + Core", color:"#ef4444", training:true,
+    note:"Priorité graisse viscérale — ne jamais sauter",
+    exercises:[
+      {id:"me_cardio", name:"Tapis marche rapide",     type:"cardio", defDur:35, defSpd:6, note:"35 min minimum"},
+      {id:"ab_crunch", name:"Ab Crunch",               type:"muscu",  defW:12},
+      {id:"abdos_lf",  name:"Abdominaux Life Fitness", type:"muscu",  defW:15},
+      {id:"twist",     name:"Twist Machine XR.117",    type:"muscu",  defW:10},
+    ]},
+  Jeudi:    { label:"🏋️ Haut Pull",    color:"#8b5cf6", training:true,
+    exercises:[
+      {id:"j_warmup",    name:"Tapis — Échauffement",  type:"cardio", defDur:10, defSpd:5},
+      {id:"lat_machine", name:"Super Lat Machine",     type:"muscu",  defW:32},
+      {id:"row",         name:"Row",                   type:"muscu",  defW:30},
+      {id:"pullover",    name:"Pullover Machine",      type:"muscu",  defW:45},
+      {id:"biceps_flex", name:"Flexion Biceps",        type:"muscu",  defW:12},
+      {id:"j_cooldown",  name:"Tapis — Fin de séance", type:"cardio", defDur:10, defSpd:6},
+    ]},
+  Vendredi: { label:"🍑 Fessiers",      color:"#ec4899", training:true,
+    note:"Hip Thrust & Abductor = protection genoux",
+    exercises:[
+      {id:"v_warmup",    name:"Tapis — Échauffement",  type:"cardio", defDur:10, defSpd:5},
+      {id:"hip_thrust",  name:"Hip Thrust",             type:"muscu",  defW:25, note:"Priorité absolue"},
+      {id:"abductor",    name:"Abductor / Adductor",   type:"muscu",  defW:25, note:"Protège les genoux"},
+      {id:"rear_kick",   name:"Rear Kick",              type:"muscu",  defW:20},
+      {id:"leg_press45", name:"Leg Press 45°",          type:"muscu",  defW:40},
+      {id:"v_cooldown",  name:"Tapis — Fin de séance",  type:"cardio", defDur:10, defSpd:6},
+    ]},
+  Samedi:   { label:"🚶 Cardio long",   color:"#10b981", training:true,
+    note:"Séance cardio dédiée — graisse viscérale",
+    exercises:[
+      {id:"cardio_sat", name:"Tapis — Marche soutenue", type:"cardio", defDur:55, defSpd:5.5},
+    ]},
+  Dimanche: { label:"😴 Repos", color:"#6b7280", training:false, exercises:[] },
+};
+
+const DAYS = Object.keys(PROGRAM);
+const DAY_SHORT = {Lundi:"LUN",Mardi:"MAR",Mercredi:"MER",Jeudi:"JEU",Vendredi:"VEN",Samedi:"SAM",Dimanche:"DIM"};
+const ALL_MUSCU = [];
+Object.values(PROGRAM).forEach(d => d.exercises.forEach(e => { if (e.type === "muscu") ALL_MUSCU.push(e); }));
+
+function getTodayDay() {
+  return ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"][new Date().getDay()];
+}
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function exDef(id, field) {
+  for (const d of DAYS) { const ex = PROGRAM[d].exercises.find(e => e.id === id); if (ex) return ex[field]; }
+  return undefined;
+}
+
+// ─── Storage (localStorage) ───────────────────────────────────────────────────
+async function storeGet(key) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; }
+}
+async function storeSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+function getApiKey() { return localStorage.getItem("wt_api_key") || ""; }
+function saveApiKey(k) { localStorage.setItem("wt_api_key", k); }
+
+// ─── Live state (fixes stale closure on rotation) ─────────────────────────────
+const LIVE = { activeDay: getTodayDay(), setCounts: {}, timer: null };
+
+// ─── Reducer ─────────────────────────────────────────────────────────────────
+const INIT = {
+  activeDay: getTodayDay(), setCounts: {}, timer: null, view: "today",
+  weights: {}, sets: {}, reps: {}, durations: {}, speeds: {},
+  sessions: [], bodyWeights: [], chargeHistory: {}, tipsCache: {},
+  statsEx: ALL_MUSCU[0] ? ALL_MUSCU[0].id : "",
+  confirm: null, saved: false,
+};
+
+function reducer(state, action) {
+  switch (action.type) {
+    case "LOAD":      return { ...state, ...action.payload };
+    case "SET_VIEW":  return { ...state, view: action.view };
+    case "SET_DAY":   return action.day !== state.activeDay ? { ...state, activeDay: action.day, setCounts: {} } : state;
+    case "SET_W":     return { ...state, weights:   { ...state.weights,    [action.id]: action.val } };
+    case "SET_S":     return { ...state, sets:      { ...state.sets,       [action.id]: action.val } };
+    case "SET_R":     return { ...state, reps:      { ...state.reps,       [action.id]: action.val } };
+    case "SET_DUR":   return { ...state, durations: { ...state.durations,  [action.id]: action.val } };
+    case "SET_SPD":   return { ...state, speeds:    { ...state.speeds,     [action.id]: action.val } };
+    case "SERIE":     return { ...state, setCounts: { ...state.setCounts,  [action.id]: (state.setCounts[action.id] || 0) + 1 } };
+    case "START_TIMER": return { ...state, timer: action.timer };
+    case "STOP_TIMER":  return { ...state, timer: null };
+    case "PAUSE_TIMER": {
+      if (!state.timer) return state;
+      if (!state.timer.paused) {
+        const rem = Math.max(0, Math.round((state.timer.endTime - Date.now()) / 1000));
+        return { ...state, timer: { ...state.timer, paused: true, pausedRemaining: rem } };
+      }
+      return { ...state, timer: { ...state.timer, paused: false, endTime: Date.now() + state.timer.pausedRemaining * 1000, pausedRemaining: null } };
+    }
+    case "LOG_SESSION": {
+      const day = PROGRAM[state.activeDay];
+      const log = {
+        date: new Date().toLocaleDateString("fr-FR"), dateISO: todayStr(),
+        day: state.activeDay, label: day.label,
+        exercises: day.exercises.map(ex => ex.type === "cardio"
+          ? { name: ex.name, duration: state.durations[ex.id] || ex.defDur, speed: state.speeds[ex.id] || ex.defSpd, type: "cardio", date: new Date().toLocaleDateString("fr-FR") }
+          : { name: ex.name, weight: state.weights[ex.id] !== undefined ? state.weights[ex.id] : (exDef(ex.id,"defW") || 0), sets: state.sets[ex.id] || 3, reps: state.reps[ex.id] || 12, type: "muscu", date: new Date().toLocaleDateString("fr-FR") }
+        ),
+      };
+      const today = todayStr();
+      const newCH = { ...state.chargeHistory };
+      day.exercises.filter(e => e.type === "muscu").forEach(ex => {
+        const w = state.weights[ex.id] !== undefined ? state.weights[ex.id] : (exDef(ex.id,"defW") || 0);
+        const prev = newCH[ex.id] || [];
+        newCH[ex.id] = [...prev.filter(e => e.date !== today), { date: today, v: w }].slice(-60);
+      });
+      return { ...state, sessions: [log, ...state.sessions.slice(0, 49)], setCounts: {}, chargeHistory: newCH, saved: true };
+    }
+    case "UNSAVE":      return { ...state, saved: false };
+    case "SAVE_BW": {
+      const today = todayStr();
+      const updated = [...state.bodyWeights.filter(e => e.date !== today), { date: today, v: action.val }]
+        .sort((a, b) => a.date.localeCompare(b.date)).slice(-90);
+      return { ...state, bodyWeights: updated };
+    }
+    case "DEL_BW":      return { ...state, bodyWeights: state.bodyWeights.filter(e => e.date !== action.date) };
+    case "DEL_SESSION": return { ...state, sessions: state.sessions.filter(s => !(s.dateISO === action.dateISO && s.day === action.day)) };
+    case "SET_CONFIRM": return { ...state, confirm: action.confirm };
+    case "SET_STATS_EX":return { ...state, statsEx: action.id };
+    case "CACHE_TIPS":  return { ...state, tipsCache: { ...state.tipsCache, [action.key]: action.tips } };
+    default: return state;
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function estimateDuration(day, state) {
+  let total = 0, mc = 0;
+  for (const ex of day.exercises) {
+    if (ex.type === "cardio") total += (state.durations[ex.id] || ex.defDur);
+    else { const s = state.sets[ex.id] || 3; total += s * 0.75 + (s - 1) * 1.5 + 0.5; mc++; }
+  }
+  if (mc > 1) total += (mc - 1) * 2;
+  return Math.round(total);
+}
+
+function computeStreak(sessions) {
+  const dates = [...new Set(sessions.filter(s => PROGRAM[s.day] && PROGRAM[s.day].training).map(s => s.dateISO).filter(Boolean))].sort().reverse();
+  if (!dates.length) return 0;
+  let streak = 0;
+  let check = new Date(); check.setHours(0, 0, 0, 0);
+  for (const d of dates) {
+    const sd = new Date(d); sd.setHours(0, 0, 0, 0);
+    const diff = Math.round((check - sd) / 86400000);
+    if (diff <= 1) { streak++; check = sd; }
+    else {
+      let allRest = true;
+      for (let i = 1; i < diff; i++) {
+        const g = new Date(check); g.setDate(g.getDate() - i);
+        const gday = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"][g.getDay()];
+        if (PROGRAM[gday] && PROGRAM[gday].training) { allRest = false; break; }
+      }
+      if (allRest && diff <= 3) { streak++; check = sd; } else break;
+    }
+  }
+  return streak;
+}
+
+function getLastPerf(sessions, exName) {
+  const today = todayStr();
+  for (const sess of sessions) {
+    if (sess.dateISO === today) continue;
+    if (!sess.exercises) continue;
+    const ex = sess.exercises.find(e => e.name === exName && e.type === "muscu");
+    if (ex) return ex;
+  }
+  return null;
+}
+
+// ─── UI primitives ────────────────────────────────────────────────────────────
+const B = (c) => ({
+  width:40, height:40, borderRadius:10,
+  background: c+"18", border: "1.5px solid "+c+"44",
+  color: c, fontSize:22, fontWeight:800, cursor:"pointer",
+  display:"flex", alignItems:"center", justifyContent:"center",
+  fontFamily:"inherit", touchAction:"manipulation",
+});
+
+function Counter({ label, value, onDec, onInc, unit, color, valueColor }) {
+  return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #1a1a28"}}>
+      <span style={{fontSize:13,color:"#888",flex:1}}>{label}</span>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <button onClick={onDec} style={B(color)}>−</button>
+        <span style={{fontSize:22,fontWeight:800,color:valueColor||"#fff",minWidth:42,textAlign:"center"}}>{value}</span>
+        <button onClick={onInc} style={B(color)}>+</button>
+      </div>
+      <span style={{fontSize:12,color:"#555",width:34,textAlign:"right"}}>{unit}</span>
+    </div>
+  );
+}
+
+function Sparkline({ data, color, height=60 }) {
+  if (!data || data.length < 2) return <div style={{color:"#333",fontSize:12,textAlign:"center",padding:"16px 0"}}>Pas encore assez de données</div>;
+  const vals = data.map(d => d.v);
+  const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn || 1;
+  const W = 200;
+  const pts = data.map((d, i) => {
+    const x = (i / (data.length - 1)) * (W - 8) + 4;
+    const y = height - 8 - ((d.v - mn) / rng) * (height - 16);
+    return x+","+y;
+  }).join(" ");
+  return (
+    <svg width="100%" viewBox={"0 0 "+W+" "+height} style={{overflow:"visible"}}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+      {data.map((d, i) => {
+        const x = (i / (data.length - 1)) * (W - 8) + 4;
+        const y = height - 8 - ((d.v - mn) / rng) * (height - 16);
+        return <circle key={i} cx={x} cy={y} r={3} fill={color}/>;
+      })}
+    </svg>
+  );
+}
+
+// ─── RestTimer ────────────────────────────────────────────────────────────────
+function RestTimer({ timer, color, onClose, onPause }) {
+  const calcRem = () => timer.paused ? (timer.pausedRemaining || 0) : Math.max(0, Math.round((timer.endTime - Date.now()) / 1000));
+  const [rem, setRem] = useState(calcRem);
+  const totalRef = useRef(timer.paused ? (timer.pausedRemaining || 90) : Math.max(1, Math.round((timer.endTime - Date.now()) / 1000)));
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    if (timer.paused) { setRem(timer.pausedRemaining || 0); return; }
+    const iv = setInterval(() => {
+      const r = Math.max(0, Math.round((timer.endTime - Date.now()) / 1000));
+      setRem(r);
+      if (r === 0 && !doneRef.current) {
+        doneRef.current = true;
+        if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+        clearInterval(iv);
+      }
+    }, 500);
+    return () => clearInterval(iv);
+  }, [timer.endTime, timer.paused]);
+
+  const done = rem === 0;
+  const r = 54, circ = 2 * Math.PI * r;
+  const progress = rem / Math.max(totalRef.current, 1);
+  const mins = Math.floor(rem / 60), secs = rem % 60;
+  const strokeColor = done ? "#10b981" : timer.paused ? "#f59e0b" : color;
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"#000000ee",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"#13131f",borderRadius:24,padding:"32px 28px",width:"80%",maxWidth:300,textAlign:"center",border:"2px solid "+color+"44"}}>
+        <div style={{fontSize:11,color:"#555",letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>Repos</div>
+        <div style={{fontSize:14,fontWeight:700,color:"#aaa",marginBottom:24}}>{timer.label}</div>
+        <div style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:24}}>
+          <svg width={130} height={130} style={{transform:"rotate(-90deg)"}}>
+            <circle cx={65} cy={65} r={r} fill="none" stroke="#1e1e2e" strokeWidth={8}/>
+            <circle cx={65} cy={65} r={r} fill="none" stroke={strokeColor} strokeWidth={8}
+              strokeDasharray={circ} strokeDashoffset={circ*(1-progress)}
+              strokeLinecap="round" style={{transition:timer.paused?"none":"stroke-dashoffset .5s linear"}}/>
+          </svg>
+          <div style={{position:"absolute",textAlign:"center"}}>
+            {done ? <div style={{fontSize:36}}>✅</div> : (
+              <>
+                <div style={{fontSize:36,fontWeight:800,color:strokeColor,lineHeight:1}}>
+                  {mins > 0 ? mins+":"+String(secs).padStart(2,"0") : rem}
+                </div>
+                <div style={{fontSize:11,color:"#555",marginTop:2}}>{mins > 0 ? "min" : "sec"}</div>
+                {timer.paused && <div style={{fontSize:10,color:"#f59e0b",marginTop:2}}>EN PAUSE</div>}
+              </>
+            )}
+          </div>
+        </div>
+        {done
+          ? <div style={{fontSize:16,fontWeight:700,color:"#10b981",marginBottom:16}}>C'est parti ! 💪</div>
+          : <button onClick={onPause} style={{padding:"10px 28px",borderRadius:10,background:color+"18",border:"1.5px solid "+color+"44",color,fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer",marginBottom:16}}>
+              {timer.paused ? "▶ Reprendre" : "⏸ Pause"}
+            </button>
+        }
+        <button onClick={onClose} style={{width:"100%",padding:14,borderRadius:12,background:done?"#10b981":"#1e1e2e",border:"none",color:"#fff",fontFamily:"inherit",fontSize:15,fontWeight:700,cursor:"pointer"}}>
+          {done ? "Fermer" : "Passer"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── ApiKeyModal ──────────────────────────────────────────────────────────────
+function ApiKeyModal({ onClose }) {
+  const [key, setKey] = useState(getApiKey());
+  const [saved, setSaved] = useState(false);
+  const handleSave = () => { saveApiKey(key.trim()); setSaved(true); setTimeout(onClose, 700); };
+  return (
+    <div style={{position:"fixed",inset:0,background:"#000000ee",zIndex:1001,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"#13131f",borderRadius:24,padding:"28px 24px",width:"90%",maxWidth:340,border:"2px solid #3b82f644"}}>
+        <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:6}}>⚙️ Clé API Anthropic</div>
+        <div style={{fontSize:12,color:"#555",marginBottom:16}}>Nécessaire pour les conseils technique (bouton ?). Stockée uniquement dans ce navigateur.</div>
+        <input
+          type="password" value={key} onChange={e => setKey(e.target.value)}
+          placeholder="Colle ta clé Anthropic ici..."
+          style={{width:"100%",padding:"12px 14px",borderRadius:10,background:"#0c0c14",border:"1px solid #2a2a3a",color:"#fff",fontFamily:"inherit",fontSize:14,marginBottom:16,outline:"none",boxSizing:"border-box"}}
+        />
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onClose} style={{flex:1,padding:12,borderRadius:12,background:"#1e1e2e",border:"none",color:"#666",fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer"}}>Annuler</button>
+          <button onClick={handleSave} style={{flex:2,padding:12,borderRadius:12,background:saved?"#10b981":"#3b82f6",border:"none",color:"#fff",fontFamily:"inherit",fontSize:14,fontWeight:800,cursor:"pointer",transition:"background .3s"}}>
+            {saved ? "✅ Enregistrée !" : "Enregistrer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── FormTipsModal ────────────────────────────────────────────────────────────
+function FormTipsModal({ exName, color, tipsCache, onCached, onClose }) {
+  const [tips, setTips] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [fromCache, setFromCache] = useState(false);
+  const [needKey, setNeedKey] = useState(false);
+  const cacheKey = "tips_" + exName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (tipsCache[cacheKey]) { setTips(tipsCache[cacheKey]); setFromCache(true); setLoading(false); return; }
+      const stored = await storeGet(cacheKey);
+      if (stored && stored.points) { setTips(stored); onCached(cacheKey, stored); setFromCache(true); setLoading(false); return; }
+      const apiKey = getApiKey();
+      if (!apiKey) { if (!cancelled) { setNeedKey(true); setLoading(false); } return; }
+      try {
+        const resp = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true", // nosecret
+          },
+          body: JSON.stringify({
+            model: "claude-haiku-4-5-20251001", max_tokens: 800,
+            system: "Tu es un coach de salle. Thomas, 34 ans, débutant, 183cm ~139kg, machines Panatta/Life Fitness/Technogym. Réponds en JSON valide uniquement, sans markdown. Format: {\"points\":[\"p1\",\"p2\",\"p3\",\"p4\"],\"erreurs\":[\"e1\",\"e2\"],\"youtube\":\"mot clé\"}",
+            messages: [{ role:"user", content:"Conseils technique pour \""+exName+"\", débutant en surpoids sur machine. 4 points clés, 2 erreurs, 1 mot clé YouTube." }]
+          })
+        });
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const data = await resp.json();
+        const block = data.content && data.content.find(c => c.type === "text");
+        const raw = block ? block.text : "";
+        const clean = raw.replace(/```json|```/g, "").trim();
+        let parsed;
+        try { parsed = JSON.parse(clean); } catch {
+          const m = clean.match(/\{[\s\S]*\}/);
+          if (m) parsed = JSON.parse(m[0]); else throw new Error("JSON introuvable");
+        }
+        if (!cancelled) { setTips(parsed); onCached(cacheKey, parsed); storeSet(cacheKey, parsed); }
+      } catch(e) {
+        if (!cancelled) setTips({ error: true, msg: e.message });
+      }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const ytUrl = "https://www.youtube.com/results?search_query=" + encodeURIComponent((tips && tips.youtube ? tips.youtube : exName) + " musculation débutant");
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"#000000ee",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div style={{background:"#13131f",borderRadius:"20px 20px 0 0",padding:"24px 20px 36px",width:"100%",maxWidth:500,border:"2px solid "+color+"33",maxHeight:"85vh",overflowY:"auto"}}>
+        <div style={{width:40,height:4,background:"#2a2a3a",borderRadius:2,margin:"0 auto 20px"}}/>
+        <div style={{fontSize:17,fontWeight:800,color:"#fff",marginBottom:4}}>{exName}</div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:20}}>
+          <span style={{fontSize:12,color:"#555"}}>Guide technique — adapté débutant</span>
+          {fromCache && <span style={{fontSize:10,color:"#10b981",background:"#10b98118",border:"1px solid #10b98133",borderRadius:10,padding:"2px 7px",fontWeight:700}}>✓ cache</span>}
+        </div>
+        {loading && <div style={{textAlign:"center",padding:"30px 0",color:"#555"}}><div style={{fontSize:24,marginBottom:8}}>⏳</div><div style={{fontSize:13}}>Chargement...</div></div>}
+        {needKey && (
+          <div style={{textAlign:"center",padding:"20px 0"}}>
+            <div style={{fontSize:24,marginBottom:8}}>🔑</div>
+            <div style={{fontSize:14,color:"#aaa",marginBottom:4}}>Clé API requise</div>
+            <div style={{fontSize:12,color:"#555"}}>Configure-la via ⚙️ en haut à droite</div>
+          </div>
+        )}
+        {!loading && !needKey && tips && tips.error && (
+          <div style={{color:"#ef4444",fontSize:13,textAlign:"center",padding:"20px 0"}}>
+            <div style={{fontSize:20,marginBottom:8}}>⚠️</div>Impossible de charger.<br/>
+            <span style={{fontSize:11,color:"#555"}}>{tips.msg}</span>
+          </div>
+        )}
+        {!loading && !needKey && tips && !tips.error && (
+          <>
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:12,color,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>✅ Points clés</div>
+              {(tips.points || []).map((p, i) => (
+                <div key={i} style={{display:"flex",gap:10,marginBottom:10}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",background:color+"22",border:"1.5px solid "+color+"55",color,fontSize:12,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{i+1}</div>
+                  <div style={{fontSize:14,color:"#ddd",lineHeight:1.5}}>{p}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{marginBottom:20}}>
+              <div style={{fontSize:12,color:"#ef4444",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>⚠️ Erreurs à éviter</div>
+              {(tips.erreurs || []).map((e, i) => (
+                <div key={i} style={{display:"flex",gap:10,marginBottom:10}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",background:"#ef444422",border:"1.5px solid #ef444455",color:"#ef4444",fontSize:14,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>✕</div>
+                  <div style={{fontSize:14,color:"#ddd",lineHeight:1.5}}>{e}</div>
+                </div>
+              ))}
+            </div>
+            <a href={ytUrl} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,width:"100%",padding:14,borderRadius:12,background:"#ff000020",border:"1.5px solid #ff000044",color:"#ff4444",fontFamily:"inherit",fontSize:14,fontWeight:700,textDecoration:"none",marginBottom:12,boxSizing:"border-box"}}>
+              <span style={{fontSize:18}}>▶</span> Voir un tutoriel sur YouTube
+            </a>
+          </>
+        )}
+        <button onClick={onClose} style={{width:"100%",padding:14,borderRadius:12,background:"#1e1e2e",border:"none",color:"#888",fontFamily:"inherit",fontSize:15,fontWeight:700,cursor:"pointer"}}>Fermer</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── WeightModal ──────────────────────────────────────────────────────────────
+function WeightModal({ color, lastWeight, onSave, onClose }) {
+  const [val, setVal] = useState(lastWeight || 139);
+  const [success, setSuccess] = useState(false);
+  const handleSave = () => { setSuccess(true); setTimeout(() => onSave(val), 700); };
+  return (
+    <div style={{position:"fixed",inset:0,background:"#000000ee",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"#13131f",borderRadius:24,padding:"28px 24px",width:"80%",maxWidth:300,textAlign:"center",border:"2px solid "+(success?"#10b981":color)+"44",transition:"border-color .3s"}}>
+        <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:6}}>{success ? "✅ Poids enregistré !" : "⚖️ Mon poids aujourd'hui"}</div>
+        <div style={{fontSize:12,color:"#555",marginBottom:20}}>{success ? "Bonne continuation 💪" : "Saisir à jeun pour plus de précision"}</div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:24}}>
+          <button disabled={success} onClick={() => setVal(v => Math.max(50, Math.round((v-0.1)*10)/10))} style={B(color)}>−</button>
+          <span style={{fontSize:38,fontWeight:800,color:success?"#10b981":color,minWidth:80,textAlign:"center"}}>{val}</span>
+          <button disabled={success} onClick={() => setVal(v => Math.round((v+0.1)*10)/10)} style={B(color)}>+</button>
+        </div>
+        <div style={{fontSize:13,color:"#555",marginBottom:20}}>Objectif : <span style={{color:"#10b981"}}>99,6 kg</span> · Reste : <span style={{color}}>{(val-99.6).toFixed(1)} kg</span></div>
+        {!success && (
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={onClose} style={{flex:1,padding:12,borderRadius:12,background:"#1e1e2e",border:"none",color:"#666",fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer"}}>Annuler</button>
+            <button onClick={handleSave} style={{flex:2,padding:12,borderRadius:12,background:color,border:"none",color:"#fff",fontFamily:"inherit",fontSize:14,fontWeight:800,cursor:"pointer"}}>Enregistrer</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── ConfirmModal ─────────────────────────────────────────────────────────────
+function ConfirmModal({ onConfirm, onCancel }) {
+  return (
+    <div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"#13131f",borderRadius:20,padding:"24px 20px",width:"80%",maxWidth:300,textAlign:"center",border:"2px solid #ef444444"}}>
+        <div style={{fontSize:20,marginBottom:8}}>🗑️</div>
+        <div style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:6}}>Supprimer ?</div>
+        <div style={{fontSize:12,color:"#555",marginBottom:20}}>Cette action est irréversible.</div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onCancel} style={{flex:1,padding:12,borderRadius:12,background:"#1e1e2e",border:"none",color:"#888",fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer"}}>Annuler</button>
+          <button onClick={onConfirm} style={{flex:1,padding:12,borderRadius:12,background:"#ef444425",border:"1px solid #ef444455",color:"#ef4444",fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer"}}>Supprimer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ExCard ───────────────────────────────────────────────────────────────────
+function ExCard({ ex, color, state, dispatch, onTips, onSerie }) {
+  const isWarmup = ex.id.includes("warmup"), isCooldown = ex.id.includes("cooldown");
+  const cardColor = (isWarmup || isCooldown) ? "#10b981" : color;
+
+  if (ex.type === "cardio") {
+    const dur = state.durations[ex.id] !== undefined ? state.durations[ex.id] : ex.defDur;
+    const spd = state.speeds[ex.id] !== undefined ? state.speeds[ex.id] : ex.defSpd;
+    const nameColor = (isWarmup || isCooldown) ? "#10b981" : "#eee";
+    const icon = isWarmup ? "🔥" : isCooldown ? "🏁" : "🏃";
+    return (
+      <div style={{background:"#13131f",borderRadius:14,borderLeft:"4px solid "+cardColor,padding:"14px 14px 10px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+          <span style={{fontSize:16}}>{icon}</span>
+          <span style={{fontSize:14,fontWeight:700,color:nameColor}}>{ex.name}</span>
+        </div>
+        {ex.note && <div style={{fontSize:11,color:"#f97316",marginBottom:8}}>⚠ {ex.note}</div>}
+        <Counter label="Durée" value={dur} onDec={() => dispatch({type:"SET_DUR",id:ex.id,val:Math.max(5,dur-5)})} onInc={() => dispatch({type:"SET_DUR",id:ex.id,val:dur+5})} unit="min" color={cardColor} valueColor={cardColor}/>
+        <Counter label="Vitesse" value={spd} onDec={() => dispatch({type:"SET_SPD",id:ex.id,val:Math.max(0.5,Math.round((spd-0.5)*2)/2)})} onInc={() => dispatch({type:"SET_SPD",id:ex.id,val:Math.round((spd+0.5)*2)/2})} unit="km/h" color={cardColor} valueColor={cardColor}/>
+        <div style={{fontSize:12,color:"#444",textAlign:"center",paddingTop:8}}>~{(dur/60*spd).toFixed(1)} km estimés</div>
+      </div>
+    );
+  }
+
+  const w = state.weights[ex.id] !== undefined ? state.weights[ex.id] : (exDef(ex.id,"defW") || 0);
+  const s = state.sets[ex.id] || 3;
+  const r = state.reps[ex.id] || 12;
+  const done = state.setCounts[ex.id] || 0;
+  const allDone = done >= s;
+  const lastPerf = getLastPerf(state.sessions, ex.name);
+  const canProgress = lastPerf && lastPerf.weight === w;
+  const isRegress = lastPerf && w < lastPerf.weight;
+  const borderColor = allDone ? "#10b981" : isRegress ? "#f59e0b" : color;
+
+  return (
+    <div style={{background:"#13131f",borderRadius:14,borderLeft:"4px solid "+borderColor,padding:"14px 14px 10px",opacity:allDone?0.85:1}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+        <span style={{fontSize:15,fontWeight:700,color:allDone?"#10b981":"#eee",flex:1}}>{allDone?"✅ ":""}{ex.name}</span>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",gap:4}}>
+            {Array.from({length:s}).map((_,i) => (
+              <div key={i} style={{width:11,height:11,borderRadius:"50%",background:i<done?"#10b981":"#2a2a3a",border:i<done?"none":"1.5px solid #3a3a4a"}}/>
+            ))}
+          </div>
+          <button onClick={() => onTips(ex)} style={{width:28,height:28,borderRadius:"50%",background:color+"20",border:"1.5px solid "+color+"55",color,fontSize:14,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0}}>?</button>
+        </div>
+      </div>
+      {ex.note && <div style={{fontSize:11,color:"#f97316",marginBottom:6}}>⚠ {ex.note}</div>}
+      {lastPerf && (
+        <div style={{marginBottom:8,padding:"7px 10px",borderRadius:8,background:"#0c0c14",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:11,color:"#555"}}>Dernière fois <span style={{color:"#777"}}>{lastPerf.date||""}</span></span>
+          <span style={{fontSize:12,fontWeight:700,color:isRegress?"#f59e0b":lastPerf.weight===w?"#555":"#10b981"}}>{lastPerf.sets}×{lastPerf.reps} · {lastPerf.weight} kg</span>
+        </div>
+      )}
+      {canProgress && !allDone && (
+        <div style={{marginBottom:8,padding:"7px 10px",borderRadius:8,background:"#10b98112",border:"1px solid #10b98130",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:11,color:"#10b981"}}>💡 Tu peux progresser !</span>
+          <button onClick={() => dispatch({type:"SET_W",id:ex.id,val:w+2.5})} style={{padding:"3px 10px",borderRadius:6,background:"#10b98125",border:"1px solid #10b98155",color:"#10b981",fontSize:12,fontWeight:800,cursor:"pointer"}}>+2,5 kg</button>
+        </div>
+      )}
+      {isRegress && !allDone && (
+        <div style={{marginBottom:8,padding:"7px 10px",borderRadius:8,background:"#f59e0b12",border:"1px solid #f59e0b30",fontSize:11,color:"#f59e0b"}}>
+          ⚠️ Poids inférieur à la dernière séance ({lastPerf.weight} kg)
+        </div>
+      )}
+      <Counter label="Séries" value={s} onDec={() => dispatch({type:"SET_S",id:ex.id,val:Math.max(1,s-1)})} onInc={() => dispatch({type:"SET_S",id:ex.id,val:s+1})} unit="" color={color}/>
+      <Counter label="Reps"   value={r} onDec={() => dispatch({type:"SET_R",id:ex.id,val:Math.max(1,r-1)})} onInc={() => dispatch({type:"SET_R",id:ex.id,val:r+1})} unit="" color={color}/>
+      <Counter label="Poids"  value={w} onDec={() => dispatch({type:"SET_W",id:ex.id,val:Math.max(0,w-2.5)})} onInc={() => dispatch({type:"SET_W",id:ex.id,val:w+2.5})} unit="kg" color={color} valueColor={color}/>
+      <button
+        disabled={allDone}
+        onClick={() => !allDone && onSerie(ex.id)}
+        style={{width:"100%",marginTop:12,padding:12,borderRadius:10,border:"none",background:allDone?"#1a1a28":color+"22",color:allDone?"#333":color,fontFamily:"inherit",fontSize:14,fontWeight:800,cursor:allDone?"default":"pointer",touchAction:"manipulation",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
+      >
+        {allDone ? "✅ Exercice terminé" : "🔁 Série "+(done+1)+"/"+s+" terminée → Repos 90s"}
+      </button>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+function WorkoutTracker() {
+  const [state, dispatch] = useReducer(reducer, INIT);
+  const [weightModal, setWeightModal] = useState(false);
+  const [tipsTarget, setTipsTarget] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const todayBtnRef = useRef(null);
+  const today = getTodayDay();
+  const day = PROGRAM[state.activeDay];
+  const color = day.color;
+
+  useEffect(() => { LIVE.activeDay = state.activeDay; LIVE.setCounts = state.setCounts; LIVE.timer = state.timer; });
+
+  useEffect(() => {
+    (async () => {
+      const [sess, data] = await Promise.all([storeGet("wt_session"), storeGet("wt_data")]);
+      const payload = {};
+      if (data) Object.assign(payload, data);
+      if (sess && sess.activeDay === getTodayDay()) {
+        payload.activeDay = sess.activeDay;
+        payload.setCounts = sess.setCounts || {};
+      }
+      if (Object.keys(payload).length) dispatch({ type:"LOAD", payload });
+      if (sess && sess.timer) {
+        const rem = Math.round((sess.timer.endTime - Date.now()) / 1000);
+        if (sess.timer.paused || rem > 0) dispatch({ type:"START_TIMER", timer: sess.timer });
+      }
+    })();
+    setTimeout(() => { if (todayBtnRef.current) todayBtnRef.current.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"}); }, 100);
+  }, []);
+
+  useEffect(() => {
+    storeSet("wt_session", { activeDay: state.activeDay, setCounts: state.setCounts, timer: state.timer });
+  }, [state.activeDay, state.setCounts, state.timer]);
+
+  const persistTimerRef = useRef(null);
+  useEffect(() => {
+    clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      const { weights, sets, reps, durations, speeds, sessions, bodyWeights, chargeHistory, tipsCache } = state;
+      storeSet("wt_data", { weights, sets, reps, durations, speeds, sessions, bodyWeights, chargeHistory, tipsCache });
+    }, 800);
+    return () => clearTimeout(persistTimerRef.current);
+  }, [state.weights, state.sets, state.reps, state.durations, state.speeds, state.sessions, state.bodyWeights, state.chargeHistory, state.tipsCache]);
+
+  const saveAll = useCallback(() => {
+    storeSet("wt_session", { activeDay: LIVE.activeDay, setCounts: LIVE.setCounts, timer: LIVE.timer });
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("orientationchange", saveAll);
+    window.addEventListener("pagehide", saveAll);
+    window.addEventListener("beforeunload", saveAll);
+    const onVis = () => { if (document.hidden) saveAll(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("orientationchange", saveAll);
+      window.removeEventListener("pagehide", saveAll);
+      window.removeEventListener("beforeunload", saveAll);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [saveAll]);
+
+  useEffect(() => {
+    if (state.saved) { const t = setTimeout(() => dispatch({type:"UNSAVE"}), 2500); return () => clearTimeout(t); }
+  }, [state.saved]);
+
+  const streak = computeStreak(state.sessions);
+  const lastBW = state.bodyWeights.length ? state.bodyWeights[state.bodyWeights.length-1].v : null;
+  const todayLogged = state.bodyWeights.some(e => e.date === todayStr());
+  const estMin = day.exercises.length ? estimateDuration(day, state) : 0;
+  const over = estMin > 62;
+  const thisMonth = todayStr().slice(0, 7);
+  const monthCount = state.sessions.filter(s => s.dateISO && s.dateISO.startsWith(thisMonth)).length;
+  const chData = state.chargeHistory[state.statsEx] || [];
+
+  const execConfirm = () => {
+    const c = state.confirm; if (!c) return;
+    if (c.type === "weight") dispatch({ type:"DEL_BW", date: c.date });
+    if (c.type === "session") dispatch({ type:"DEL_SESSION", dateISO: c.dateISO, day: c.day });
+    dispatch({ type:"SET_CONFIRM", confirm: null });
+  };
+
+  const tabStyle = v => ({
+    flex:1, padding:"14px 0", background:"none", border:"none",
+    borderBottom: state.view===v ? "3px solid "+color : "3px solid transparent",
+    color: state.view===v ? color : "#444", fontSize:18, fontWeight:700,
+    fontFamily:"inherit", cursor:"pointer", touchAction:"manipulation",
+  });
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0c0c14",color:"#f0f0f0",fontFamily:"system-ui,-apple-system,sans-serif",paddingBottom:100,maxWidth:"100vw",overflow:"hidden",boxSizing:"border-box"}}>
+
+      {state.timer && <RestTimer timer={state.timer} color={color} onClose={() => dispatch({type:"STOP_TIMER"})} onPause={() => dispatch({type:"PAUSE_TIMER"})}/>}
+      {weightModal && <WeightModal color={color} lastWeight={lastBW} onSave={v => { dispatch({type:"SAVE_BW",val:v}); setWeightModal(false); }} onClose={() => setWeightModal(false)}/>}
+      {tipsTarget && <FormTipsModal exName={tipsTarget.name} color={color} tipsCache={state.tipsCache} onCached={(k,v) => dispatch({type:"CACHE_TIPS",key:k,tips:v})} onClose={() => setTipsTarget(null)}/>}
+      {state.confirm && <ConfirmModal onConfirm={execConfirm} onCancel={() => dispatch({type:"SET_CONFIRM",confirm:null})}/>}
+      {settingsOpen && <ApiKeyModal onClose={() => setSettingsOpen(false)}/>}
+
+      {/* Header */}
+      <div style={{background:"#111120",borderBottom:"3px solid "+color,padding:"14px 16px 12px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:11,color:"#555",letterSpacing:2,textTransform:"uppercase"}}>Suivi Muscu</div>
+            <div style={{fontSize:20,fontWeight:800,color:"#fff"}}>Thomas 💪</div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {streak > 0 && (
+              <div style={{textAlign:"center",background:"#1e1e2e",borderRadius:10,padding:"6px 10px"}}>
+                <div style={{fontSize:16}}>🔥</div>
+                <div style={{fontSize:12,fontWeight:800,color:"#f97316"}}>{streak}j</div>
+              </div>
+            )}
+            <button onClick={() => setWeightModal(true)} style={{textAlign:"center",background:todayLogged?"#10b98120":"#1e1e2e",borderRadius:10,padding:"6px 10px",border:todayLogged?"1px solid #10b98144":"1px solid #2a2a3a",cursor:"pointer"}}>
+              <div style={{fontSize:14}}>⚖️</div>
+              <div style={{fontSize:12,fontWeight:800,color:todayLogged?"#10b981":"#555"}}>{lastBW ? lastBW+"kg" : "—"}</div>
+            </button>
+            <button onClick={() => setSettingsOpen(true)} style={{width:36,height:36,borderRadius:10,background:"#1e1e2e",border:"1px solid #2a2a3a",color:"#666",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>⚙️</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex",background:"#111120",borderBottom:"1px solid #1e1e2e"}}>
+        <button style={tabStyle("today")}   onClick={() => dispatch({type:"SET_VIEW",view:"today"})}>📋</button>
+        <button style={tabStyle("stats")}   onClick={() => dispatch({type:"SET_VIEW",view:"stats"})}>📊</button>
+        <button style={tabStyle("history")} onClick={() => dispatch({type:"SET_VIEW",view:"history"})}>📈</button>
+      </div>
+
+      {/* ── Aujourd'hui ── */}
+      {state.view === "today" && (
+        <div>
+          <div style={{background:"#111120",padding:"10px 12px",borderBottom:"1px solid #1a1a28"}}>
+            <div style={{display:"flex",gap:6,overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+              {DAYS.map(d => {
+                const dc = PROGRAM[d].color;
+                const isActive = d === state.activeDay, isToday = d === today;
+                return (
+                  <button key={d} ref={isToday ? todayBtnRef : null}
+                    onClick={() => dispatch({type:"SET_DAY",day:d})}
+                    style={{minWidth:46,padding:"9px 4px",borderRadius:10,border:isActive?"2px solid "+dc:"2px solid #2a2a3a",background:isActive?dc+"25":"#0c0c14",color:isActive?dc:"#555",fontFamily:"inherit",fontSize:10,fontWeight:700,cursor:"pointer",flexShrink:0,position:"relative",touchAction:"manipulation"}}>
+                    {DAY_SHORT[d]}
+                    {isToday && <div style={{position:"absolute",bottom:3,left:"50%",transform:"translateX(-50%)",width:4,height:4,borderRadius:"50%",background:dc}}/>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{padding:"14px 14px 0"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{fontSize:18,fontWeight:800,color}}>{day.label}</div>
+              {estMin > 0 && <div style={{fontSize:12,fontWeight:700,padding:"4px 10px",borderRadius:20,background:over?"#ef444422":color+"18",color:over?"#ef4444":color,border:"1px solid "+(over?"#ef444444":color+"33")}}>~{estMin} min {over?"⚠️":"✓"}</div>}
+            </div>
+            {day.note && <div style={{fontSize:12,color:"#ef4444",background:"#ef444415",borderRadius:8,padding:"8px 10px",marginBottom:10,border:"1px solid #ef444430"}}>🎯 {day.note}</div>}
+            {day.exercises.length === 0 && <div style={{color:"#444",fontSize:15,marginTop:40,textAlign:"center"}}>Repos total 😴</div>}
+            {day.exercises.length > 0 && (
+              <button onClick={() => { const endTime=Date.now()+120000; dispatch({type:"START_TIMER",timer:{endTime,label:"Entre exercices",paused:false,pausedRemaining:null}}); }}
+                style={{width:"100%",padding:"10px 8px",borderRadius:10,marginBottom:4,background:color+"12",border:"1.5px solid "+color+"35",color:"#ddd",fontFamily:"inherit",cursor:"pointer",touchAction:"manipulation",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                <span style={{fontSize:16}}>➡️</span>
+                <span style={{fontSize:14,fontWeight:800,color}}>2 min</span>
+                <span style={{fontSize:12,color:"#555"}}>Entre exercices</span>
+              </button>
+            )}
+          </div>
+
+          <div style={{padding:"10px 14px 0",display:"flex",flexDirection:"column",gap:10}}>
+            {day.exercises.map(ex => (
+              <ExCard key={ex.id} ex={ex} color={color} state={state} dispatch={dispatch} onTips={setTipsTarget}
+                onSerie={id => {
+                  dispatch({type:"SERIE", id});
+                  dispatch({type:"START_TIMER", timer:{endTime:Date.now()+90000, label:"Entre séries", paused:false, pausedRemaining:null}});
+                }}
+              />
+            ))}
+          </div>
+
+          {day.exercises.length > 0 && (
+            <div style={{padding:"16px 14px 0"}}>
+              {over && <div style={{fontSize:12,color:"#ef4444",textAlign:"center",marginBottom:8}}>⚠️ Séance trop longue</div>}
+              <button onClick={() => dispatch({type:"LOG_SESSION"})}
+                style={{width:"100%",padding:16,background:state.saved?"#10b981":color,border:"none",borderRadius:14,color:"#fff",fontFamily:"inherit",fontSize:16,fontWeight:800,cursor:"pointer",touchAction:"manipulation"}}>
+                {state.saved ? "✅ Séance enregistrée !" : "💾 Valider la séance"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Stats ── */}
+      {state.view === "stats" && (
+        <div style={{padding:"16px 14px"}}>
+          <div style={{display:"flex",gap:10,marginBottom:12}}>
+            <div style={{flex:2,background:"#13131f",borderRadius:14,padding:16,display:"flex",alignItems:"center",gap:12}}>
+              <div style={{fontSize:32}}>🔥</div>
+              <div>
+                <div style={{fontSize:22,fontWeight:800,color:"#f97316"}}>{streak}j d'affilée</div>
+                <div style={{fontSize:11,color:"#555"}}>{streak===0?"Lance-toi !":streak>=7?"Incroyable 🏆":streak>=3?"Bonne dynamique !":"Continue !"}</div>
+              </div>
+            </div>
+            <div style={{flex:1,background:"#13131f",borderRadius:14,padding:16,textAlign:"center",display:"flex",flexDirection:"column",justifyContent:"center"}}>
+              <div style={{fontSize:26,fontWeight:800,color}}>{monthCount}</div>
+              <div style={{fontSize:11,color:"#555",marginTop:2}}>séances ce mois</div>
+            </div>
+          </div>
+
+          <div style={{background:"#13131f",borderRadius:14,padding:16,marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>⚖️ Poids corporel</div>
+              <button onClick={() => setWeightModal(true)} style={{padding:"6px 12px",borderRadius:8,background:color+"20",border:"1px solid "+color+"44",color,fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Ajouter</button>
+            </div>
+            {lastBW ? (
+              <>
+                <div style={{display:"flex",gap:10,marginBottom:12}}>
+                  {[["Actuel",lastBW+" kg",color],["Objectif","99,6 kg","#10b981"],["Reste",(lastBW-99.6).toFixed(1)+" kg","#f97316"]].map(([l,v,c]) => (
+                    <div key={l} style={{flex:1,background:"#0c0c14",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
+                      <div style={{fontSize:11,color:"#555",marginBottom:4}}>{l}</div>
+                      <div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+                <Sparkline data={state.bodyWeights.slice(-30)} color={color}/>
+                {state.bodyWeights.length >= 2 && (() => {
+                  const diff = state.bodyWeights[state.bodyWeights.length-1].v - state.bodyWeights[0].v;
+                  return <div style={{fontSize:12,color:diff<0?"#10b981":"#ef4444",textAlign:"center",marginTop:6}}>{diff<0?"▼ "+Math.abs(diff).toFixed(1)+" kg perdus 🎉":"▲ "+diff.toFixed(1)+" kg depuis le début"}</div>;
+                })()}
+                <div style={{marginTop:14,borderTop:"1px solid #1a1a28",paddingTop:10}}>
+                  <div style={{fontSize:11,color:"#555",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Entrées récentes</div>
+                  {[...state.bodyWeights].reverse().slice(0,5).map(e => (
+                    <div key={e.date} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid #1a1a28"}}>
+                      <span style={{fontSize:13,color:"#888"}}>{new Date(e.date).toLocaleDateString("fr-FR")}</span>
+                      <span style={{fontSize:13,fontWeight:700,color}}>{e.v} kg</span>
+                      <button onClick={() => dispatch({type:"SET_CONFIRM",confirm:{type:"weight",date:e.date}})} style={{padding:"3px 8px",borderRadius:6,background:"#ef444418",border:"1px solid #ef444440",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer"}}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : <div style={{color:"#333",fontSize:13,textAlign:"center",padding:"16px 0"}}>Commence à enregistrer ton poids chaque matin !</div>}
+          </div>
+
+          <div style={{background:"#13131f",borderRadius:14,padding:16}}>
+            <div style={{fontSize:15,fontWeight:800,color:"#fff",marginBottom:12}}>📈 Progression des charges</div>
+            <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginBottom:14,paddingBottom:4}}>
+              <div style={{display:"flex",gap:6,width:"max-content"}}>
+                {ALL_MUSCU.map(ex => (
+                  <button key={ex.id} onClick={() => dispatch({type:"SET_STATS_EX",id:ex.id})}
+                    style={{padding:"7px 12px",borderRadius:20,fontSize:12,fontWeight:700,background:state.statsEx===ex.id?color+"25":"#0c0c14",border:state.statsEx===ex.id?"1.5px solid "+color:"1.5px solid #2a2a3a",color:state.statsEx===ex.id?color:"#555",cursor:"pointer",touchAction:"manipulation",whiteSpace:"nowrap"}}>
+                    {ex.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {chData.length >= 2 ? (
+              <>
+                <Sparkline data={chData.slice(-20)} color={color}/>
+                <div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontSize:12}}>
+                  <span style={{color:"#555"}}>Début : <span style={{color:"#aaa"}}>{chData[0].v} kg</span></span>
+                  <span style={{color:"#555"}}>Actuel : <span style={{color}}>{chData[chData.length-1].v} kg</span></span>
+                  <span style={{color:chData[chData.length-1].v>chData[0].v?"#10b981":"#ef4444"}}>{chData[chData.length-1].v>chData[0].v?"▲":"▼"} {Math.abs(chData[chData.length-1].v-chData[0].v).toFixed(1)} kg</span>
+                </div>
+              </>
+            ) : <div style={{color:"#333",fontSize:13,textAlign:"center",padding:"16px 0"}}>Change le poids de cet exercice pour voir ta progression</div>}
+          </div>
+        </div>
+      )}
+
+      {/* ── Historique ── */}
+      {state.view === "history" && (
+        <div style={{padding:"16px 14px"}}>
+          <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:14}}>Historique ({state.sessions.length} séances)</div>
+          {state.sessions.length === 0 && <div style={{color:"#333",fontSize:14,textAlign:"center",marginTop:60}}>Aucune séance encore.</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {state.sessions.map((s, i) => {
+              const dc = (PROGRAM[s.day] && PROGRAM[s.day].color) || "#888";
+              return (
+                <div key={i} style={{background:"#13131f",borderRadius:12,borderLeft:"4px solid "+dc,padding:14}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div><span style={{fontWeight:700,color:dc,fontSize:14}}>{s.label}</span><span style={{fontSize:12,color:"#444",marginLeft:8}}>{s.date}</span></div>
+                    <button onClick={() => dispatch({type:"SET_CONFIRM",confirm:{type:"session",dateISO:s.dateISO,day:s.day}})} style={{padding:"3px 8px",borderRadius:6,background:"#ef444418",border:"1px solid #ef444440",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}>✕</button>
+                  </div>
+                  {(s.exercises||[]).map((ex,j) => {
+                    const exVal = ex.type==="cardio" ? ex.duration+"min · "+ex.speed+"km/h" : ex.sets+"×"+ex.reps+" · "+ex.weight+"kg";
+                    return (
+                      <div key={j} style={{fontSize:13,padding:"5px 0",borderBottom:j<s.exercises.length-1?"1px solid #1a1a28":"none",display:"flex",justifyContent:"space-between",gap:8}}>
+                        <span style={{color:"#888",flexShrink:1}}>{ex.name}</span>
+                        <span style={{color:dc,fontWeight:600,flexShrink:0}}>{exVal}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<WorkoutTracker />);
+  </script>
+</body>
+</html>
