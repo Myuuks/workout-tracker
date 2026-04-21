@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0c0c14">
   <title>Suivi Muscu — Thomas 💪</title>
+  <link rel="manifest" href="manifest.json">
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -15,6 +18,11 @@
     ::-webkit-scrollbar { width: 3px; height: 3px; }
     ::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
   </style>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    }
+  </script>
 </head>
 <body>
   <div id="root"></div>
@@ -87,6 +95,34 @@ function todayStr() { return new Date().toISOString().slice(0, 10); }
 function exDef(id, field) {
   for (const d of DAYS) { const ex = PROGRAM[d].exercises.find(e => e.id === id); if (ex) return ex[field]; }
   return undefined;
+}
+function compute1RM(weight, reps) {
+  if (!weight || !reps) return null;
+  return Math.round(weight * (1 + reps / 30) * 10) / 10;
+}
+function computeWeightTrend(bodyWeights) {
+  if (bodyWeights.length < 4) return null;
+  const recent = bodyWeights.slice(-30);
+  const n = recent.length;
+  const x0 = new Date(recent[0].date).getTime();
+  const xs = recent.map(e => (new Date(e.date).getTime() - x0) / 86400000);
+  const ys = recent.map(e => e.v);
+  const xm = xs.reduce((a, b) => a + b) / n;
+  const ym = ys.reduce((a, b) => a + b) / n;
+  const num = xs.reduce((s, xi, i) => s + (xi - xm) * (ys[i] - ym), 0);
+  const den = xs.reduce((s, xi) => s + (xi - xm) ** 2, 0);
+  if (den === 0 || num >= 0) return null;
+  const slope = num / den;
+  const lastY = ys[n - 1];
+  const daysToTarget = Math.round((99.6 - lastY) / slope);
+  if (daysToTarget <= 0) return null;
+  const targetDate = new Date(Date.now() + daysToTarget * 86400000);
+  return {
+    slope,
+    daysToTarget,
+    weeksToTarget: Math.round(daysToTarget / 7),
+    targetDate: targetDate.toLocaleDateString("fr-FR", { day:"numeric", month:"long", year:"numeric" }),
+  };
 }
 
 // ─── Conseils techniques (pré-générés) ───────────────────────────────────────
@@ -188,15 +224,13 @@ const STATIC_TIPS = {
   },
 };
 
-// ─── Storage (localStorage) ───────────────────────────────────────────────────
+// ─── Storage ──────────────────────────────────────────────────────────────────
 async function storeGet(key) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; }
 }
 async function storeSet(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
-function getApiKey() { return localStorage.getItem("wt_api_key") || ""; }
-function saveApiKey(k) { localStorage.setItem("wt_api_key", k); }
 
 // ─── Live state (fixes stale closure on rotation) ─────────────────────────────
 const LIVE = { activeDay: getTodayDay(), setCounts: {}, timer: null };
@@ -205,7 +239,7 @@ const LIVE = { activeDay: getTodayDay(), setCounts: {}, timer: null };
 const INIT = {
   activeDay: getTodayDay(), setCounts: {}, timer: null, view: "today",
   weights: {}, sets: {}, reps: {}, durations: {}, speeds: {},
-  sessions: [], bodyWeights: [], chargeHistory: {}, tipsCache: {},
+  sessions: [], bodyWeights: [], chargeHistory: {},
   statsEx: ALL_MUSCU[0] ? ALL_MUSCU[0].id : "",
   confirm: null, saved: false,
 };
@@ -261,7 +295,6 @@ function reducer(state, action) {
     case "DEL_SESSION": return { ...state, sessions: state.sessions.filter(s => !(s.dateISO === action.dateISO && s.day === action.day)) };
     case "SET_CONFIRM": return { ...state, confirm: action.confirm };
     case "SET_STATS_EX":return { ...state, statsEx: action.id };
-    case "CACHE_TIPS":  return { ...state, tipsCache: { ...state.tipsCache, [action.key]: action.tips } };
     default: return state;
   }
 }
@@ -413,34 +446,77 @@ function RestTimer({ timer, color, onClose, onPause }) {
             </button>
         }
         <button onClick={onClose} style={{width:"100%",padding:14,borderRadius:12,background:done?"#10b981":"#1e1e2e",border:"none",color:"#fff",fontFamily:"inherit",fontSize:15,fontWeight:700,cursor:"pointer"}}>
-          {done ? "Fermer" : "Passer"}
+          {done ? "Exercice suivant ➡️" : "Passer"}
         </button>
       </div>
     </div>
   );
 }
 
-// ─── ApiKeyModal ──────────────────────────────────────────────────────────────
-function ApiKeyModal({ onClose }) {
-  const [key, setKey] = useState(getApiKey());
-  const [saved, setSaved] = useState(false);
-  const handleSave = () => { saveApiKey(key.trim()); setSaved(true); setTimeout(onClose, 700); };
+// ─── DataModal (export / import) ──────────────────────────────────────────────
+function DataModal({ state, dispatch, onClose }) {
+  const [status, setStatus] = useState(null);
+
+  const handleExport = () => {
+    const data = {
+      version: 1, exportDate: new Date().toISOString(),
+      weights: state.weights, sets: state.sets, reps: state.reps,
+      durations: state.durations, speeds: state.speeds,
+      sessions: state.sessions, bodyWeights: state.bodyWeights,
+      chargeHistory: state.chargeHistory,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "suivi-muscu-" + new Date().toISOString().slice(0, 10) + ".json";
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus("export");
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        const payload = {};
+        if (data.weights) payload.weights = data.weights;
+        if (data.sets) payload.sets = data.sets;
+        if (data.reps) payload.reps = data.reps;
+        if (data.durations) payload.durations = data.durations;
+        if (data.speeds) payload.speeds = data.speeds;
+        if (data.sessions) payload.sessions = data.sessions;
+        if (data.bodyWeights) payload.bodyWeights = data.bodyWeights;
+        if (data.chargeHistory) payload.chargeHistory = data.chargeHistory;
+        dispatch({ type: "LOAD", payload });
+        setStatus("import");
+        setTimeout(onClose, 1200);
+      } catch { setStatus("error"); }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div style={{position:"fixed",inset:0,background:"#000000ee",zIndex:1001,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:"#13131f",borderRadius:24,padding:"28px 24px",width:"90%",maxWidth:340,border:"2px solid #3b82f644"}}>
-        <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:6}}>⚙️ Clé API Anthropic</div>
-        <div style={{fontSize:12,color:"#555",marginBottom:16}}>Nécessaire pour les conseils technique (bouton ?). Stockée uniquement dans ce navigateur.</div>
-        <input
-          type="password" value={key} onChange={e => setKey(e.target.value)}
-          placeholder="Colle ta clé Anthropic ici..."
-          style={{width:"100%",padding:"12px 14px",borderRadius:10,background:"#0c0c14",border:"1px solid #2a2a3a",color:"#fff",fontFamily:"inherit",fontSize:14,marginBottom:16,outline:"none",boxSizing:"border-box"}}
-        />
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={onClose} style={{flex:1,padding:12,borderRadius:12,background:"#1e1e2e",border:"none",color:"#666",fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer"}}>Annuler</button>
-          <button onClick={handleSave} style={{flex:2,padding:12,borderRadius:12,background:saved?"#10b981":"#3b82f6",border:"none",color:"#fff",fontFamily:"inherit",fontSize:14,fontWeight:800,cursor:"pointer",transition:"background .3s"}}>
-            {saved ? "✅ Enregistrée !" : "Enregistrer"}
-          </button>
-        </div>
+      <div style={{background:"#13131f",borderRadius:24,padding:"28px 24px",width:"88%",maxWidth:340,border:"2px solid #3b82f644"}}>
+        <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:6}}>💾 Données</div>
+        <div style={{fontSize:12,color:"#555",marginBottom:20}}>Tes données sont stockées dans ce navigateur. Exporte pour les sauvegarder ou les transférer.</div>
+
+        <button onClick={handleExport} style={{width:"100%",padding:14,borderRadius:12,background:"#3b82f620",border:"1.5px solid #3b82f644",color:"#3b82f6",fontFamily:"inherit",fontSize:14,fontWeight:800,cursor:"pointer",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          {status==="export" ? "✅ Fichier téléchargé !" : "⬇️ Exporter mes données (JSON)"}
+        </button>
+
+        <label style={{width:"100%",padding:14,borderRadius:12,background:"#10b98120",border:"1.5px solid #10b98144",color:"#10b981",fontFamily:"inherit",fontSize:14,fontWeight:800,cursor:"pointer",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxSizing:"border-box"}}>
+          {status==="import" ? "✅ Données importées !" : status==="error" ? "⚠️ Fichier invalide" : "⬆️ Importer une sauvegarde"}
+          <input type="file" accept=".json" onChange={handleImport} style={{display:"none"}}/>
+        </label>
+
+        <div style={{fontSize:11,color:"#333",marginBottom:16,textAlign:"center"}}>L'import remplace les données existantes</div>
+
+        <button onClick={onClose} style={{width:"100%",padding:12,borderRadius:12,background:"#1e1e2e",border:"none",color:"#666",fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer"}}>Fermer</button>
       </div>
     </div>
   );
@@ -448,19 +524,7 @@ function ApiKeyModal({ onClose }) {
 
 // ─── FormTipsModal ────────────────────────────────────────────────────────────
 function FormTipsModal({ exName, color, onClose }) {
-  const [tips, setTips] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (STATIC_TIPS[exName]) {
-      setTips(STATIC_TIPS[exName]);
-      setLoading(false);
-      return;
-    }
-    setTips({ error: true, msg: "Exercice non répertorié." });
-    setLoading(false);
-  }, []);
-
+  const tips = STATIC_TIPS[exName] || null;
   const ytUrl = "https://www.youtube.com/results?search_query=" + encodeURIComponent((tips && tips.youtube ? tips.youtube : exName) + " musculation débutant");
 
   return (
@@ -471,18 +535,12 @@ function FormTipsModal({ exName, color, onClose }) {
         <div style={{marginBottom:20}}>
           <span style={{fontSize:12,color:"#555"}}>Guide technique — adapté débutant</span>
         </div>
-        {loading && <div style={{textAlign:"center",padding:"30px 0",color:"#555"}}><div style={{fontSize:24,marginBottom:8}}>⏳</div><div style={{fontSize:13}}>Chargement...</div></div>}
-        {!loading && tips && tips.error && (
-          <div style={{color:"#ef4444",fontSize:13,textAlign:"center",padding:"20px 0"}}>
-            <div style={{fontSize:20,marginBottom:8}}>⚠️</div>Impossible de charger.<br/>
-            <span style={{fontSize:11,color:"#555"}}>{tips.msg}</span>
-          </div>
-        )}
-        {!loading && tips && !tips.error && (
+        {!tips && <div style={{color:"#ef4444",fontSize:13,textAlign:"center",padding:"20px 0"}}>Exercice non répertorié.</div>}
+        {tips && (
           <>
             <div style={{marginBottom:16}}>
               <div style={{fontSize:12,color,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>✅ Points clés</div>
-              {(tips.points || []).map((p, i) => (
+              {tips.points.map((p, i) => (
                 <div key={i} style={{display:"flex",gap:10,marginBottom:10}}>
                   <div style={{width:22,height:22,borderRadius:"50%",background:color+"22",border:"1.5px solid "+color+"55",color,fontSize:12,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{i+1}</div>
                   <div style={{fontSize:14,color:"#ddd",lineHeight:1.5}}>{p}</div>
@@ -491,7 +549,7 @@ function FormTipsModal({ exName, color, onClose }) {
             </div>
             <div style={{marginBottom:20}}>
               <div style={{fontSize:12,color:"#ef4444",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>⚠️ Erreurs à éviter</div>
-              {(tips.erreurs || []).map((e, i) => (
+              {tips.erreurs.map((e, i) => (
                 <div key={i} style={{display:"flex",gap:10,marginBottom:10}}>
                   <div style={{width:22,height:22,borderRadius:"50%",background:"#ef444422",border:"1.5px solid #ef444455",color:"#ef4444",fontSize:14,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>✕</div>
                   <div style={{fontSize:14,color:"#ddd",lineHeight:1.5}}>{e}</div>
@@ -564,7 +622,7 @@ function ExCard({ ex, color, state, dispatch, onTips, onSerie }) {
     const nameColor = (isWarmup || isCooldown) ? "#10b981" : "#eee";
     const icon = isWarmup ? "🔥" : isCooldown ? "🏁" : "🏃";
     return (
-      <div style={{background:"#13131f",borderRadius:14,borderLeft:"4px solid "+cardColor,padding:"14px 14px 10px"}}>
+      <div id={"excard_"+ex.id} style={{background:"#13131f",borderRadius:14,borderLeft:"4px solid "+cardColor,padding:"14px 14px 10px"}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
           <span style={{fontSize:16}}>{icon}</span>
           <span style={{fontSize:14,fontWeight:700,color:nameColor}}>{ex.name}</span>
@@ -586,9 +644,10 @@ function ExCard({ ex, color, state, dispatch, onTips, onSerie }) {
   const canProgress = lastPerf && lastPerf.weight === w;
   const isRegress = lastPerf && w < lastPerf.weight;
   const borderColor = allDone ? "#10b981" : isRegress ? "#f59e0b" : color;
+  const rm1 = compute1RM(w, r);
 
   return (
-    <div style={{background:"#13131f",borderRadius:14,borderLeft:"4px solid "+borderColor,padding:"14px 14px 10px",opacity:allDone?0.85:1}}>
+    <div id={"excard_"+ex.id} style={{background:"#13131f",borderRadius:14,borderLeft:"4px solid "+borderColor,padding:"14px 14px 10px",opacity:allDone?0.85:1}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
         <span style={{fontSize:15,fontWeight:700,color:allDone?"#10b981":"#eee",flex:1}}>{allDone?"✅ ":""}{ex.name}</span>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -621,10 +680,11 @@ function ExCard({ ex, color, state, dispatch, onTips, onSerie }) {
       <Counter label="Séries" value={s} onDec={() => dispatch({type:"SET_S",id:ex.id,val:Math.max(1,s-1)})} onInc={() => dispatch({type:"SET_S",id:ex.id,val:s+1})} unit="" color={color}/>
       <Counter label="Reps"   value={r} onDec={() => dispatch({type:"SET_R",id:ex.id,val:Math.max(1,r-1)})} onInc={() => dispatch({type:"SET_R",id:ex.id,val:r+1})} unit="" color={color}/>
       <Counter label="Poids"  value={w} onDec={() => dispatch({type:"SET_W",id:ex.id,val:Math.max(0,w-2.5)})} onInc={() => dispatch({type:"SET_W",id:ex.id,val:w+2.5})} unit="kg" color={color} valueColor={color}/>
+      {rm1 && <div style={{fontSize:11,color:"#444",textAlign:"right",padding:"4px 0"}}>1RM estimé ~<span style={{color:color+"bb",fontWeight:700}}>{rm1} kg</span></div>}
       <button
         disabled={allDone}
         onClick={() => !allDone && onSerie(ex.id)}
-        style={{width:"100%",marginTop:12,padding:12,borderRadius:10,border:"none",background:allDone?"#1a1a28":color+"22",color:allDone?"#333":color,fontFamily:"inherit",fontSize:14,fontWeight:800,cursor:allDone?"default":"pointer",touchAction:"manipulation",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
+        style={{width:"100%",marginTop:10,padding:12,borderRadius:10,border:"none",background:allDone?"#1a1a28":color+"22",color:allDone?"#333":color,fontFamily:"inherit",fontSize:14,fontWeight:800,cursor:allDone?"default":"pointer",touchAction:"manipulation",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
       >
         {allDone ? "✅ Exercice terminé" : "🔁 Série "+(done+1)+"/"+s+" terminée → Repos 90s"}
       </button>
@@ -637,12 +697,35 @@ function WorkoutTracker() {
   const [state, dispatch] = useReducer(reducer, INIT);
   const [weightModal, setWeightModal] = useState(false);
   const [tipsTarget, setTipsTarget] = useState(null);
+  const [dataModal, setDataModal] = useState(false);
   const todayBtnRef = useRef(null);
   const today = getTodayDay();
   const day = PROGRAM[state.activeDay];
   const color = day.color;
 
-  useEffect(() => { LIVE.activeDay = state.activeDay; LIVE.setCounts = state.setCounts; LIVE.timer = state.timer; });
+  // Guided mode: scroll to next incomplete exercise after rest timer
+  const scrollToNextEx = useCallback((activeDay, setCounts, sets) => {
+    const exercises = PROGRAM[activeDay].exercises;
+    for (const ex of exercises) {
+      if (ex.type !== "muscu") continue;
+      const done = setCounts[ex.id] || 0;
+      const total = sets[ex.id] || 3;
+      if (done < total) {
+        setTimeout(() => {
+          document.getElementById("excard_" + ex.id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 150);
+        break;
+      }
+    }
+  }, []);
+
+  const handleTimerClose = useCallback(() => {
+    const { activeDay, setCounts, sets } = LIVE;
+    dispatch({ type: "STOP_TIMER" });
+    scrollToNextEx(activeDay, setCounts, sets || {});
+  }, [scrollToNextEx]);
+
+  useEffect(() => { LIVE.activeDay = state.activeDay; LIVE.setCounts = state.setCounts; LIVE.timer = state.timer; LIVE.sets = state.sets; });
 
   useEffect(() => {
     (async () => {
@@ -670,11 +753,11 @@ function WorkoutTracker() {
   useEffect(() => {
     clearTimeout(persistTimerRef.current);
     persistTimerRef.current = setTimeout(() => {
-      const { weights, sets, reps, durations, speeds, sessions, bodyWeights, chargeHistory, tipsCache } = state;
-      storeSet("wt_data", { weights, sets, reps, durations, speeds, sessions, bodyWeights, chargeHistory, tipsCache });
+      const { weights, sets, reps, durations, speeds, sessions, bodyWeights, chargeHistory } = state;
+      storeSet("wt_data", { weights, sets, reps, durations, speeds, sessions, bodyWeights, chargeHistory });
     }, 800);
     return () => clearTimeout(persistTimerRef.current);
-  }, [state.weights, state.sets, state.reps, state.durations, state.speeds, state.sessions, state.bodyWeights, state.chargeHistory, state.tipsCache]);
+  }, [state.weights, state.sets, state.reps, state.durations, state.speeds, state.sessions, state.bodyWeights, state.chargeHistory]);
 
   const saveAll = useCallback(() => {
     storeSet("wt_session", { activeDay: LIVE.activeDay, setCounts: LIVE.setCounts, timer: LIVE.timer });
@@ -706,6 +789,7 @@ function WorkoutTracker() {
   const thisMonth = todayStr().slice(0, 7);
   const monthCount = state.sessions.filter(s => s.dateISO && s.dateISO.startsWith(thisMonth)).length;
   const chData = state.chargeHistory[state.statsEx] || [];
+  const weightTrend = computeWeightTrend(state.bodyWeights);
 
   const execConfirm = () => {
     const c = state.confirm; if (!c) return;
@@ -724,10 +808,11 @@ function WorkoutTracker() {
   return (
     <div style={{minHeight:"100vh",background:"#0c0c14",color:"#f0f0f0",fontFamily:"system-ui,-apple-system,sans-serif",paddingBottom:100,maxWidth:"100vw",overflow:"hidden",boxSizing:"border-box"}}>
 
-      {state.timer && <RestTimer timer={state.timer} color={color} onClose={() => dispatch({type:"STOP_TIMER"})} onPause={() => dispatch({type:"PAUSE_TIMER"})}/>}
+      {state.timer && <RestTimer timer={state.timer} color={color} onClose={handleTimerClose} onPause={() => dispatch({type:"PAUSE_TIMER"})}/>}
       {weightModal && <WeightModal color={color} lastWeight={lastBW} onSave={v => { dispatch({type:"SAVE_BW",val:v}); setWeightModal(false); }} onClose={() => setWeightModal(false)}/>}
       {tipsTarget && <FormTipsModal exName={tipsTarget.name} color={color} onClose={() => setTipsTarget(null)}/>}
       {state.confirm && <ConfirmModal onConfirm={execConfirm} onCancel={() => dispatch({type:"SET_CONFIRM",confirm:null})}/>}
+      {dataModal && <DataModal state={state} dispatch={dispatch} onClose={() => setDataModal(false)}/>}
 
       {/* Header */}
       <div style={{background:"#111120",borderBottom:"3px solid "+color,padding:"14px 16px 12px"}}>
@@ -747,6 +832,7 @@ function WorkoutTracker() {
               <div style={{fontSize:14}}>⚖️</div>
               <div style={{fontSize:12,fontWeight:800,color:todayLogged?"#10b981":"#555"}}>{lastBW ? lastBW+"kg" : "—"}</div>
             </button>
+            <button onClick={() => setDataModal(true)} style={{width:36,height:36,borderRadius:10,background:"#1e1e2e",border:"1px solid #2a2a3a",color:"#666",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>💾</button>
           </div>
         </div>
       </div>
@@ -855,6 +941,13 @@ function WorkoutTracker() {
                   const diff = state.bodyWeights[state.bodyWeights.length-1].v - state.bodyWeights[0].v;
                   return <div style={{fontSize:12,color:diff<0?"#10b981":"#ef4444",textAlign:"center",marginTop:6}}>{diff<0?"▼ "+Math.abs(diff).toFixed(1)+" kg perdus 🎉":"▲ "+diff.toFixed(1)+" kg depuis le début"}</div>;
                 })()}
+                {weightTrend && (
+                  <div style={{marginTop:10,padding:"10px 12px",borderRadius:10,background:"#10b98112",border:"1px solid #10b98130",display:"flex",flexDirection:"column",gap:3}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#10b981"}}>📅 Projection objectif</div>
+                    <div style={{fontSize:13,color:"#ccc"}}>À ce rythme : <span style={{fontWeight:700,color:"#10b981"}}>{weightTrend.weeksToTarget} semaines</span></div>
+                    <div style={{fontSize:11,color:"#555"}}>Vers le {weightTrend.targetDate} · {(weightTrend.slope * 7).toFixed(2)} kg/semaine</div>
+                  </div>
+                )}
                 <div style={{marginTop:14,borderTop:"1px solid #1a1a28",paddingTop:10}}>
                   <div style={{fontSize:11,color:"#555",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Entrées récentes</div>
                   {[...state.bodyWeights].reverse().slice(0,5).map(e => (
@@ -889,6 +982,12 @@ function WorkoutTracker() {
                   <span style={{color:"#555"}}>Actuel : <span style={{color}}>{chData[chData.length-1].v} kg</span></span>
                   <span style={{color:chData[chData.length-1].v>chData[0].v?"#10b981":"#ef4444"}}>{chData[chData.length-1].v>chData[0].v?"▲":"▼"} {Math.abs(chData[chData.length-1].v-chData[0].v).toFixed(1)} kg</span>
                 </div>
+                {(() => {
+                  const cur = chData[chData.length-1];
+                  const lastEx = ALL_MUSCU.find(e => e.id === state.statsEx);
+                  const rm = lastEx ? compute1RM(cur.v, state.reps[lastEx.id] || 12) : null;
+                  return rm ? <div style={{fontSize:11,color:"#555",textAlign:"right",marginTop:4}}>1RM estimé actuel ~<span style={{color:color+"bb",fontWeight:700}}>{rm} kg</span></div> : null;
+                })()}
               </>
             ) : <div style={{color:"#333",fontSize:13,textAlign:"center",padding:"16px 0"}}>Change le poids de cet exercice pour voir ta progression</div>}
           </div>
