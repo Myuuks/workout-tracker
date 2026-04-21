@@ -89,6 +89,105 @@ function exDef(id, field) {
   return undefined;
 }
 
+// ─── Conseils techniques (pré-générés) ───────────────────────────────────────
+const STATIC_TIPS = {
+  "Leg Press XR.141": {
+    points: ["Pieds à largeur d'épaules sur la plateforme, légèrement au-dessus du centre","Descendre lentement jusqu'à 90° de flexion — ne jamais verrouiller les genoux en extension","Pousser avec les talons plutôt que les orteils pour activer quadriceps et fessiers","Dos bien plaqué contre le dossier tout au long du mouvement"],
+    erreurs: ["Laisser les genoux s'affaisser vers l'intérieur pendant la poussée","Décoller le bas du dos du siège en fin de descente"],
+    youtube: "leg press machine débutant technique"
+  },
+  "Leg Extension": {
+    points: ["Assis bien calé, chevilles sous les coussins, genoux alignés avec l'axe de rotation","Monter lentement en soufflant, tenir 1-2 secondes en haut","Redescendre de façon contrôlée — la descente est aussi importante que la montée","Ne pas balancer le corps pour aider le mouvement"],
+    erreurs: ["Monter trop vite avec un élan — perd tout le bénéfice musculaire","Hyperextendre le genou en fin de mouvement"],
+    youtube: "leg extension machine débutant"
+  },
+  "Leg Curling": {
+    points: ["Allongé à plat, chevilles bien calées sous les coussins au niveau du tendon d'Achille","Contracter les ischio-jambiers pour ramener les talons vers les fesses","Garder les hanches plaquées contre le banc tout le mouvement","Descendre lentement en 2-3 secondes pour maximiser le travail"],
+    erreurs: ["Soulever les hanches pour aider le mouvement — élimine l'isolation","Laisser les pieds redescendre trop vite sans contrôle"],
+    youtube: "leg curl allongé technique débutant"
+  },
+  "Calf Machine": {
+    points: ["Bords des pieds sur la plateforme, talons dans le vide pour une amplitude maximale","Monter au maximum sur la pointe des pieds, tenir 1 seconde en haut","Descendre jusqu'à sentir l'étirement dans le mollet","Mouvement lent et contrôlé — les mollets répondent mieux à l'amplitude complète"],
+    erreurs: ["Rebondir en bas sans contrôle — risque de tendinite","Plier les genoux pendant le mouvement"],
+    youtube: "calf raise machine mollets débutant"
+  },
+  "Chest Press": {
+    points: ["Dos bien plaqué contre le dossier, poitrine légèrement sortie","Poignets dans le prolongement des avant-bras, pas pliés vers le bas","Pousser en expirant, revenir lentement en inspirant sur 2-3 secondes","Ne pas laisser les coudes descendre sous le niveau des épaules"],
+    erreurs: ["Arquer excessivement le dos pour aider la poussée","Laisser les épaules monter vers les oreilles pendant le mouvement"],
+    youtube: "chest press machine pectoraux débutant"
+  },
+  "Incline Chest Press": {
+    points: ["Dossier incliné à 30-45° pour cibler la partie haute de la poitrine","Coudes légèrement en dessous de la ligne des épaules pour protéger les articulations","Pousser vers le haut, pas vers l'avant","Contrôler la descente sur 2-3 secondes"],
+    erreurs: ["Trop incliner le dossier — ça devient un shoulder press et surcharge les épaules","Prendre trop lourd et perdre le contrôle du mouvement"],
+    youtube: "incline chest press machine haut pectoraux débutant"
+  },
+  "Shoulder Press": {
+    points: ["Dos droit, pas cambré — rentrer légèrement le ventre pour stabiliser","Coudes à 90° en position basse, pousser jusqu'à presque étendre sans verrouiller","Poignets neutres, dans l'axe des avant-bras","Mouvement lent et contrôlé, surtout à la descente"],
+    erreurs: ["Pencher le cou vers l'avant ou hausser les épaules","Prendre de l'élan avec le bas du dos pour terminer la répétition"],
+    youtube: "shoulder press machine épaules débutant"
+  },
+  "Extension Triceps": {
+    points: ["Coudes fixés — seuls les avant-bras bougent, les coudes ne s'écartent pas","Étendre complètement les bras en serrant les triceps au point bas","Remonter lentement en contrôlant le poids","Garder les épaules basses et décontractées"],
+    erreurs: ["Laisser les coudes s'ouvrir vers les côtés — réduit l'isolation des triceps","Balancer les épaules pour aider l'extension"],
+    youtube: "extension triceps machine câble débutant"
+  },
+  "Ab Crunch": {
+    points: ["Dos arrondi, menton rentré vers la poitrine — ne jamais tirer sur la nuque","Contracter les abdos avant de tirer, pas l'inverse","Descendre lentement, garder la tension abdominale tout le long","Expirer en montant, inspirer en redescendant"],
+    erreurs: ["Tirer avec les bras et les épaules plutôt qu'avec les abdos","Descendre trop vite et rebondir en bas"],
+    youtube: "ab crunch machine abdominaux débutant"
+  },
+  "Abdominaux Life Fitness": {
+    points: ["Ajuster le siège pour que le coussin soit au niveau de la poitrine/épaules","Contracter le ventre avant de commencer le mouvement","Flexion lente : 2 sec en descendant, 2 sec en remontant","Ne pas aller trop loin en extension pour protéger le bas du dos"],
+    erreurs: ["Utiliser trop de poids et compenser avec le dos","Relâcher complètement les abdos entre chaque répétition"],
+    youtube: "abdominal machine core débutant"
+  },
+  "Twist Machine XR.117": {
+    points: ["La rotation vient du buste — les hanches restent fixes","Amplitude modérée : 30-45° de chaque côté, ne pas forcer","Mouvement lent et contrôlé, pas de rotation rapide","Garder le dos droit pendant tout le mouvement"],
+    erreurs: ["Laisser les hanches tourner avec le buste — perd l'isolation des obliques","Faire des rotations rapides qui sollicitent la colonne vertébrale"],
+    youtube: "rotation torse machine obliques débutant"
+  },
+  "Super Lat Machine": {
+    points: ["Prise légèrement plus large que les épaules, paumes vers l'avant","Se pencher légèrement en arrière (15°) et tirer la barre vers le haut de la poitrine","Serrer les omoplates ensemble en bas du mouvement","Remonter lentement en contrôlant, bras presque tendus"],
+    erreurs: ["Tirer derrière la nuque — dangereux pour les cervicales","Balancer le buste vers l'arrière avec élan pour aider la traction"],
+    youtube: "lat pulldown tirage poulie haute débutant"
+  },
+  "Row": {
+    points: ["Dos droit légèrement penché, poitrine vers l'avant, pas voûté","Tirer les coudes vers l'arrière en pinçant les omoplates en fin de mouvement","Garder les coudes près du corps pendant la traction","Contrôler le retour — ne pas laisser les poids tirer les bras"],
+    erreurs: ["Arrondir le dos pendant la traction — risque de blessure lombaire","Hausser les épaules au lieu de tirer avec les coudes"],
+    youtube: "rowing machine dos débutant technique"
+  },
+  "Pullover Machine": {
+    points: ["Bras légèrement fléchis, coudes dans les appuis de la machine","Amener les coudes vers les hanches en arc de cercle en serrant les dorsaux","Remonter lentement jusqu'à la position de départ, bras en extension","Ne pas compenser avec les épaules ou le bas du dos"],
+    erreurs: ["Tendre complètement les bras et solliciter les articulations au lieu des muscles","Prendre un élan pour descendre les bras"],
+    youtube: "pullover machine dorsaux débutant"
+  },
+  "Flexion Biceps": {
+    points: ["Coudes fixés contre le coussin ou le corps — seuls les avant-bras montent","Monter jusqu'à la contraction complète, tenir 1 seconde en haut","Descendre lentement sur 2-3 secondes pour maximiser le travail excentrique","Poignets neutres, ne pas les plier vers le bas"],
+    erreurs: ["Balancer les coudes vers l'avant pour aider la montée","Laisser le poids redescendre trop vite sans contrôle"],
+    youtube: "curl biceps machine débutant"
+  },
+  "Hip Thrust": {
+    points: ["Haut du dos appuyé sur le banc, pieds à plat au sol largeur d'épaules","Monter les hanches jusqu'à alignement dos-cuisses en serrant fort les fessiers","Tenir 1-2 secondes en haut, descendre lentement","Pousser avec les talons pour maximiser l'activation fessière"],
+    erreurs: ["Cambrer excessivement le bas du dos en haut du mouvement","Ne pas monter assez haut — les fessiers ne sont pas contractés à fond"],
+    youtube: "hip thrust machine fessiers débutant"
+  },
+  "Abductor / Adductor": {
+    points: ["Dos bien calé contre le dossier, pieds à plat","Mouvement lent et contrôlé, pas de claquement en fin d'amplitude","Abducteur : ouvrir les genoux vers l'extérieur en serrant les fessiers latéraux","Adducteur : refermer les genoux en contractant l'intérieur des cuisses"],
+    erreurs: ["Prendre trop lourd et compenser avec le bas du dos","Mouvements brusques — risque de claquage à l'intérieur des cuisses"],
+    youtube: "abducteur adducteur machine débutant"
+  },
+  "Rear Kick": {
+    points: ["Cheville dans le coussin, genou légèrement fléchi","Pousser la jambe vers l'arrière et vers le haut en contractant le fessier","Tenir 1 seconde en haut avant de redescendre lentement","Garder le buste stable — ne pas se déhancher"],
+    erreurs: ["Balancer la jambe avec élan — perd l'isolation du fessier","Monter la jambe trop haut et cambrer le dos"],
+    youtube: "rear kick machine fessiers câble débutant"
+  },
+  "Leg Press 45°": {
+    points: ["Pieds plus hauts sur la plateforme pour cibler fessiers et ischio-jambiers","Descendre jusqu'à 90° de flexion du genou, ne pas bloquer les genoux en extension","Pousser avec les talons, pas les orteils","Relâcher doucement les freins de sécurité avant de commencer"],
+    erreurs: ["Laisser les genoux s'affaisser vers l'intérieur pendant la poussée","Descendre trop bas et perdre le contact du bas du dos avec le siège"],
+    youtube: "leg press 45 degrés fessiers débutant"
+  },
+};
+
 // ─── Storage (localStorage) ───────────────────────────────────────────────────
 async function storeGet(key) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; }
@@ -348,53 +447,18 @@ function ApiKeyModal({ onClose }) {
 }
 
 // ─── FormTipsModal ────────────────────────────────────────────────────────────
-function FormTipsModal({ exName, color, tipsCache, onCached, onClose }) {
+function FormTipsModal({ exName, color, onClose }) {
   const [tips, setTips] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [fromCache, setFromCache] = useState(false);
-  const [needKey, setNeedKey] = useState(false);
-  const cacheKey = "tips_" + exName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (tipsCache[cacheKey]) { setTips(tipsCache[cacheKey]); setFromCache(true); setLoading(false); return; }
-      const stored = await storeGet(cacheKey);
-      if (stored && stored.points) { setTips(stored); onCached(cacheKey, stored); setFromCache(true); setLoading(false); return; }
-      const apiKey = getApiKey();
-      if (!apiKey) { if (!cancelled) { setNeedKey(true); setLoading(false); } return; }
-      try {
-        const resp = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-            "anthropic-dangerous-direct-browser-access": "true", // nosecret
-          },
-          body: JSON.stringify({
-            model: "claude-haiku-4-5-20251001", max_tokens: 800,
-            system: "Tu es un coach de salle. Thomas, 34 ans, débutant, 183cm ~139kg, machines Panatta/Life Fitness/Technogym. Réponds en JSON valide uniquement, sans markdown. Format: {\"points\":[\"p1\",\"p2\",\"p3\",\"p4\"],\"erreurs\":[\"e1\",\"e2\"],\"youtube\":\"mot clé\"}",
-            messages: [{ role:"user", content:"Conseils technique pour \""+exName+"\", débutant en surpoids sur machine. 4 points clés, 2 erreurs, 1 mot clé YouTube." }]
-          })
-        });
-        if (!resp.ok) throw new Error("HTTP " + resp.status);
-        const data = await resp.json();
-        const block = data.content && data.content.find(c => c.type === "text");
-        const raw = block ? block.text : "";
-        const clean = raw.replace(/```json|```/g, "").trim();
-        let parsed;
-        try { parsed = JSON.parse(clean); } catch {
-          const m = clean.match(/\{[\s\S]*\}/);
-          if (m) parsed = JSON.parse(m[0]); else throw new Error("JSON introuvable");
-        }
-        if (!cancelled) { setTips(parsed); onCached(cacheKey, parsed); storeSet(cacheKey, parsed); }
-      } catch(e) {
-        if (!cancelled) setTips({ error: true, msg: e.message });
-      }
-      if (!cancelled) setLoading(false);
-    })();
-    return () => { cancelled = true; };
+    if (STATIC_TIPS[exName]) {
+      setTips(STATIC_TIPS[exName]);
+      setLoading(false);
+      return;
+    }
+    setTips({ error: true, msg: "Exercice non répertorié." });
+    setLoading(false);
   }, []);
 
   const ytUrl = "https://www.youtube.com/results?search_query=" + encodeURIComponent((tips && tips.youtube ? tips.youtube : exName) + " musculation débutant");
@@ -404,25 +468,17 @@ function FormTipsModal({ exName, color, tipsCache, onCached, onClose }) {
       <div style={{background:"#13131f",borderRadius:"20px 20px 0 0",padding:"24px 20px 36px",width:"100%",maxWidth:500,border:"2px solid "+color+"33",maxHeight:"85vh",overflowY:"auto"}}>
         <div style={{width:40,height:4,background:"#2a2a3a",borderRadius:2,margin:"0 auto 20px"}}/>
         <div style={{fontSize:17,fontWeight:800,color:"#fff",marginBottom:4}}>{exName}</div>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:20}}>
+        <div style={{marginBottom:20}}>
           <span style={{fontSize:12,color:"#555"}}>Guide technique — adapté débutant</span>
-          {fromCache && <span style={{fontSize:10,color:"#10b981",background:"#10b98118",border:"1px solid #10b98133",borderRadius:10,padding:"2px 7px",fontWeight:700}}>✓ cache</span>}
         </div>
         {loading && <div style={{textAlign:"center",padding:"30px 0",color:"#555"}}><div style={{fontSize:24,marginBottom:8}}>⏳</div><div style={{fontSize:13}}>Chargement...</div></div>}
-        {needKey && (
-          <div style={{textAlign:"center",padding:"20px 0"}}>
-            <div style={{fontSize:24,marginBottom:8}}>🔑</div>
-            <div style={{fontSize:14,color:"#aaa",marginBottom:4}}>Clé API requise</div>
-            <div style={{fontSize:12,color:"#555"}}>Configure-la via ⚙️ en haut à droite</div>
-          </div>
-        )}
-        {!loading && !needKey && tips && tips.error && (
+        {!loading && tips && tips.error && (
           <div style={{color:"#ef4444",fontSize:13,textAlign:"center",padding:"20px 0"}}>
             <div style={{fontSize:20,marginBottom:8}}>⚠️</div>Impossible de charger.<br/>
             <span style={{fontSize:11,color:"#555"}}>{tips.msg}</span>
           </div>
         )}
-        {!loading && !needKey && tips && !tips.error && (
+        {!loading && tips && !tips.error && (
           <>
             <div style={{marginBottom:16}}>
               <div style={{fontSize:12,color,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>✅ Points clés</div>
@@ -581,7 +637,6 @@ function WorkoutTracker() {
   const [state, dispatch] = useReducer(reducer, INIT);
   const [weightModal, setWeightModal] = useState(false);
   const [tipsTarget, setTipsTarget] = useState(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const todayBtnRef = useRef(null);
   const today = getTodayDay();
   const day = PROGRAM[state.activeDay];
@@ -671,9 +726,8 @@ function WorkoutTracker() {
 
       {state.timer && <RestTimer timer={state.timer} color={color} onClose={() => dispatch({type:"STOP_TIMER"})} onPause={() => dispatch({type:"PAUSE_TIMER"})}/>}
       {weightModal && <WeightModal color={color} lastWeight={lastBW} onSave={v => { dispatch({type:"SAVE_BW",val:v}); setWeightModal(false); }} onClose={() => setWeightModal(false)}/>}
-      {tipsTarget && <FormTipsModal exName={tipsTarget.name} color={color} tipsCache={state.tipsCache} onCached={(k,v) => dispatch({type:"CACHE_TIPS",key:k,tips:v})} onClose={() => setTipsTarget(null)}/>}
+      {tipsTarget && <FormTipsModal exName={tipsTarget.name} color={color} onClose={() => setTipsTarget(null)}/>}
       {state.confirm && <ConfirmModal onConfirm={execConfirm} onCancel={() => dispatch({type:"SET_CONFIRM",confirm:null})}/>}
-      {settingsOpen && <ApiKeyModal onClose={() => setSettingsOpen(false)}/>}
 
       {/* Header */}
       <div style={{background:"#111120",borderBottom:"3px solid "+color,padding:"14px 16px 12px"}}>
@@ -693,7 +747,6 @@ function WorkoutTracker() {
               <div style={{fontSize:14}}>⚖️</div>
               <div style={{fontSize:12,fontWeight:800,color:todayLogged?"#10b981":"#555"}}>{lastBW ? lastBW+"kg" : "—"}</div>
             </button>
-            <button onClick={() => setSettingsOpen(true)} style={{width:36,height:36,borderRadius:10,background:"#1e1e2e",border:"1px solid #2a2a3a",color:"#666",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>⚙️</button>
           </div>
         </div>
       </div>
