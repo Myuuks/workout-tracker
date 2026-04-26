@@ -659,8 +659,8 @@ function ExCard({ ex, color, state, dispatch, onTips, onSerie }) {
           <span style={{fontSize:14,fontWeight:700,color:nameColor}}>{ex.name}</span>
         </div>
         {ex.note && <div style={{fontSize:11,color:"#f97316",marginBottom:8}}>⚠ {ex.note}</div>}
-        <Counter label="Durée" value={dur} onDec={() => dispatch({type:"SET_DUR",id:ex.id,val:Math.max(5,dur-5)})} onInc={() => dispatch({type:"SET_DUR",id:ex.id,val:dur+5})} unit="min" color={cardColor} valueColor={cardColor}/>
-        <Counter label="Vitesse" value={spd} onDec={() => dispatch({type:"SET_SPD",id:ex.id,val:Math.max(0.5,Math.round((spd-0.5)*2)/2)})} onInc={() => dispatch({type:"SET_SPD",id:ex.id,val:Math.round((spd+0.5)*2)/2})} unit="km/h" color={cardColor} valueColor={cardColor}/>
+        <Counter label="Durée" value={dur} onDec={() => dispatch({type:"SET_DUR",id:ex.id,val:Math.max(5,dur-5)})} onInc={() => dispatch({type:"SET_DUR",id:ex.id,val:dur+5})} unit="min" color={cardColor} valueColor={cardColor} onEdit={v => dispatch({type:"SET_DUR",id:ex.id,val:Math.max(1,Math.round(v))})}/>
+        <Counter label="Vitesse" value={spd} onDec={() => dispatch({type:"SET_SPD",id:ex.id,val:Math.max(0.5,Math.round((spd-0.5)*2)/2)})} onInc={() => dispatch({type:"SET_SPD",id:ex.id,val:Math.round((spd+0.5)*2)/2})} unit="km/h" color={cardColor} valueColor={cardColor} onEdit={v => dispatch({type:"SET_SPD",id:ex.id,val:Math.max(0.1,Math.round(v*10)/10)})}/>
         <div style={{fontSize:12,color:"#444",textAlign:"center",paddingTop:8}}>~{(dur/60*spd).toFixed(1)} km estimés</div>
       </div>
     );
