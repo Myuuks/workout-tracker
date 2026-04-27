@@ -423,6 +423,7 @@ function Sparkline({ data, color, height=60 }) {
 function RestTimer({ timer, color, onClose, onPause }) {
   const calcRem = () => timer.paused ? (timer.pausedRemaining || 0) : Math.max(0, Math.round((timer.endTime - Date.now()) / 1000));
   const [rem, setRem] = useState(calcRem);
+  const [minimized, setMinimized] = useState(false);
   const totalRef = useRef(timer.paused ? (timer.pausedRemaining || 90) : Math.max(1, Math.round((timer.endTime - Date.now()) / 1000)));
   const doneRef = useRef(false);
 
@@ -434,6 +435,7 @@ function RestTimer({ timer, color, onClose, onPause }) {
       if (r === 0 && !doneRef.current) {
         doneRef.current = true;
         if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+        setMinimized(false);
         clearInterval(iv);
       }
     }, 500);
@@ -445,10 +447,35 @@ function RestTimer({ timer, color, onClose, onPause }) {
   const progress = rem / Math.max(totalRef.current, 1);
   const mins = Math.floor(rem / 60), secs = rem % 60;
   const strokeColor = done ? "#10b981" : timer.paused ? "#f59e0b" : color;
+  const timeStr = mins > 0 ? mins+":"+String(secs).padStart(2,"0") : String(rem);
+
+  // Pastille flottante en mode minimisé
+  if (minimized) {
+    const pillR = 22, pillCirc = 2 * Math.PI * pillR;
+    return (
+      <div onClick={() => setMinimized(false)} style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",zIndex:1000,cursor:"pointer",display:"flex",alignItems:"center",gap:10,background:"#13131f",border:"2px solid "+strokeColor+"88",borderRadius:999,padding:"8px 18px 8px 10px",boxShadow:"0 4px 24px #000a"}}>
+        <svg width={52} height={52} style={{transform:"rotate(-90deg)",flexShrink:0}}>
+          <circle cx={26} cy={26} r={pillR} fill="none" stroke="#1e1e2e" strokeWidth={5}/>
+          <circle cx={26} cy={26} r={pillR} fill="none" stroke={strokeColor} strokeWidth={5}
+            strokeDasharray={pillCirc} strokeDashoffset={pillCirc*(1-progress)}
+            strokeLinecap="round" style={{transition:timer.paused?"none":"stroke-dashoffset .5s linear"}}/>
+        </svg>
+        <div style={{textAlign:"left"}}>
+          <div style={{fontSize:9,color:"#555",letterSpacing:1,textTransform:"uppercase"}}>Repos</div>
+          <div style={{fontSize:22,fontWeight:800,color:strokeColor,lineHeight:1}}>{timeStr}</div>
+          {timer.paused && <div style={{fontSize:9,color:"#f59e0b"}}>EN PAUSE</div>}
+        </div>
+        <div style={{fontSize:11,color:"#555",marginLeft:4}}>▲</div>
+      </div>
+    );
+  }
 
   return (
     <div style={{position:"fixed",inset:0,background:"#000000ee",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:"#13131f",borderRadius:24,padding:"32px 28px",width:"80%",maxWidth:300,textAlign:"center",border:"2px solid "+color+"44"}}>
+      <div style={{background:"#13131f",borderRadius:24,padding:"32px 28px",width:"80%",maxWidth:300,textAlign:"center",border:"2px solid "+color+"44",position:"relative"}}>
+        {!done && (
+          <button onClick={() => setMinimized(true)} style={{position:"absolute",top:12,right:12,background:"none",border:"none",color:"#555",fontSize:18,cursor:"pointer",padding:4,lineHeight:1}} title="Minimiser">⤓</button>
+        )}
         <div style={{fontSize:11,color:"#555",letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>Repos</div>
         <div style={{fontSize:14,fontWeight:700,color:"#aaa",marginBottom:24}}>{timer.label}</div>
         <div style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:24}}>
