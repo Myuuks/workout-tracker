@@ -72,22 +72,22 @@ const PROGRAM = {
       {id:"biceps_flex",     name:"Flexion Biceps",         type:"muscu",  defW:12},
       {id:"j_cooldown",   name:"Rameur — Fin de séance", type:"cardio", defDur:12, defSpd:4},
     ]},
-  Vendredi: { label:"🍑 Fessiers",      color:"#ec4899", training:true,
-    note:"Hip Thrust & Abductor = protection genoux",
-    exercises:[
-      {id:"v_warmup",    name:"Tapis — Échauffement",  type:"cardio", defDur:10, defSpd:5},
-      {id:"hip_thrust",  name:"Hip Thrust",            type:"muscu",  defW:25, note:"Priorité absolue"},
-      {id:"abductor",    name:"Abductor / Adductor",  type:"muscu",  defW:25, note:"Protège les genoux"},
-      {id:"rear_kick",   name:"Rear Kick",             type:"muscu",  defW:20},
-      {id:"leg_press45", name:"Leg Press 45°",         type:"muscu",  defW:40},
-      {id:"v_cooldown",  name:"Tapis — Fin de séance", type:"cardio", defDur:10, defSpd:6},
-    ]},
+  Vendredi: { label:"😴 Repos",         color:"#6b7280", training:false, exercises:[] },
   Samedi:   { label:"🚶 Cardio long",  color:"#f59e0b", training:true,
     note:"Priorité absolue — graisse viscérale.",
     exercises:[
       {id:"cardio_sat",  name:"Tapis — Marche soutenue",  type:"cardio", defDur:60, defSpd:5.5},
     ]},
-  Dimanche: { label:"😴 Repos", color:"#6b7280", training:false, exercises:[] },
+  Dimanche: { label:"🍑 Fessiers",     color:"#ec4899", training:true,
+    note:"Hip Thrust & Abductor = protection genoux",
+    exercises:[
+      {id:"v_warmup",    name:"Tapis — Échauffement",  type:"cardio", defDur:10, defSpd:5},
+      {id:"hip_thrust",  name:"Hip Thrust",            type:"muscu",  defW:25, note:"Priorité absolue"},
+      {id:"abductor",    name:"Abductor / Adductor",   type:"muscu",  defW:25, note:"Protège les genoux"},
+      {id:"rear_kick",   name:"Rear Kick",             type:"muscu",  defW:20},
+      {id:"leg_press45", name:"Leg Press 45°",         type:"muscu",  defW:40},
+      {id:"v_cooldown",  name:"Tapis — Fin de séance", type:"cardio", defDur:10, defSpd:6},
+    ]},
 };
 
 const DAYS = Object.keys(PROGRAM);
