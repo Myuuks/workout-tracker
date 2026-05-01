@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"> <!-- nosecret -->
   <meta name="theme-color" content="#0c0c14">
   <title>Suivi Muscu — Thomas 💪</title>
   <link rel="manifest" href="manifest.json">
@@ -75,10 +75,16 @@ const PROGRAM = {
       {id:"leg_press45", name:"Leg Press 45°",          type:"muscu",  defW:40},
       {id:"v_cooldown",  name:"Tapis — Fin de séance",  type:"cardio", defDur:10, defSpd:6},
     ]},
-  Samedi:   { label:"🚶 Cardio long",   color:"#10b981", training:true,
-    note:"Séance cardio dédiée — graisse viscérale",
+  Samedi:   { label:"💥 Push B",         color:"#f59e0b", training:true,
+    note:"Épaules + pectoraux variation — 2ème stimulus Push de la semaine",
     exercises:[
-      {id:"cardio_sat", name:"Tapis — Marche soutenue", type:"cardio", defDur:55, defSpd:5.5},
+      {id:"s_warmup",       name:"Tapis — Échauffement",   type:"cardio", defDur:10, defSpd:5},
+      {id:"wide_chest",     name:"Wide Chest Press",        type:"muscu",  defW:25},
+      {id:"incline_chest",  name:"Incline Chest Press",     type:"muscu",  defW:8},
+      {id:"shoulder_press", name:"Shoulder Press",          type:"muscu",  defW:10},
+      {id:"elev_lat",       name:"Élévation latérale",      type:"muscu",  defW:8},
+      {id:"triceps_ext",    name:"Extension Triceps",       type:"muscu",  defW:17},
+      {id:"s_cooldown",     name:"Tapis — Fin de séance",   type:"cardio", defDur:15, defSpd:6},
     ]},
   Dimanche: { label:"😴 Repos", color:"#6b7280", training:false, exercises:[] },
 };
@@ -86,7 +92,10 @@ const PROGRAM = {
 const DAYS = Object.keys(PROGRAM);
 const DAY_SHORT = {Lundi:"LUN",Mardi:"MAR",Mercredi:"MER",Jeudi:"JEU",Vendredi:"VEN",Samedi:"SAM",Dimanche:"DIM"};
 const ALL_MUSCU = [];
-Object.values(PROGRAM).forEach(d => d.exercises.forEach(e => { if (e.type === "muscu") ALL_MUSCU.push(e); }));
+const _seenIds = new Set();
+Object.values(PROGRAM).forEach(d => d.exercises.forEach(e => {
+  if (e.type === "muscu" && !_seenIds.has(e.id)) { _seenIds.add(e.id); ALL_MUSCU.push(e); }
+}));
 
 function getTodayDay() {
   return ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"][new Date().getDay()];
@@ -221,6 +230,16 @@ const STATIC_TIPS = {
     points: ["Pieds plus hauts sur la plateforme pour cibler fessiers et ischio-jambiers","Descendre jusqu'à 90° de flexion du genou, ne pas bloquer les genoux en extension","Pousser avec les talons, pas les orteils","Relâcher doucement les freins de sécurité avant de commencer"],
     erreurs: ["Laisser les genoux s'affaisser vers l'intérieur pendant la poussée","Descendre trop bas et perdre le contact du bas du dos avec le siège"],
     youtube: "leg press 45 degrés fessiers débutant"
+  },
+  "Wide Chest Press": {
+    points: ["Prise plus large que les épaules pour cibler les pectoraux externes","Coudes légèrement sous le niveau des épaules à la descente — protège les articulations","Pousser en expirant, contrôler la descente sur 2-3 secondes","Serrer les pectoraux en fin d'extension sans verrouiller les coudes"],
+    erreurs: ["Prise trop large qui surcharge les épaules et les poignets","Rebondir en bas du mouvement — perd le travail excentrique"],
+    youtube: "wide chest press machine pectoraux externes débutant"
+  },
+  "Élévation latérale": {
+    points: ["Légère flexion du coude (15-20°), monter jusqu'à hauteur des épaules — pas au-dessus","Penser à 'verser un verre d'eau' : pouce légèrement vers le bas en fin de mouvement","Mouvement lent et contrôlé — les deltoïdes latéraux sont petits, prendre léger","Expirer en montant, inspirer en redescendant lentement"],
+    erreurs: ["Prendre trop lourd et balancer le corps — blessure épaule fréquente","Monter trop haut (au-dessus des épaules) — surcharge l'acromion"],
+    youtube: "élévation latérale machine épaules deltoïdes débutant"
   },
 };
 
