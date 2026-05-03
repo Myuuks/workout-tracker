@@ -669,6 +669,23 @@ function DataModal({ state, dispatch, onClose }) {
     reader.readAsText(file);
   };
 
+  const handleRestoreCloud = async () => {
+    if (!BACKEND_URL) return;
+    if (!window.confirm("Restaurer depuis le cloud ? Tes seances et pesees locales seront ecrasees par le contenu du Sheet.")) return;
+    setStatus("loading");
+    try {
+      const res = await postSync("backup", {});
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "fail");
+      const payload = {};
+      if (data.sessions) payload.sessions = data.sessions;
+      if (data.weights) payload.bodyWeights = data.weights;
+      dispatch({ type: "LOAD", payload });
+      setStatus("restored");
+      setTimeout(onClose, 1200);
+    } catch { setStatus("error"); }
+  };
+
   return (
     <div style={{position:"fixed",inset:0,background:"#000000ee",zIndex:1001,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{background:"#13131f",borderRadius:24,padding:"28px 24px",width:"88%",maxWidth:340,border:"2px solid #3b82f644"}}>
@@ -684,7 +701,13 @@ function DataModal({ state, dispatch, onClose }) {
           <input type="file" accept=".json" onChange={handleImport} style={{display:"none"}}/>
         </label>
 
-        <div style={{fontSize:11,color:"#333",marginBottom:8,textAlign:"center"}}>L'import remplace les données existantes</div>
+        {BACKEND_URL && (
+          <button onClick={handleRestoreCloud} disabled={status==="loading"} style={{width:"100%",padding:14,borderRadius:12,background:"#a855f720",border:"1.5px solid #a855f744",color:"#a855f7",fontFamily:"inherit",fontSize:14,fontWeight:800,cursor:"pointer",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            {status==="loading" ? "⏳ Restauration..." : status==="restored" ? "✅ Restauré depuis le cloud !" : "☁️ Restaurer depuis le cloud (Sheet)"}
+          </button>
+        )}
+
+        <div style={{fontSize:11,color:"#333",marginBottom:8,textAlign:"center"}}>L'import / restauration remplace les données existantes</div>
         {lastExport && <div style={{fontSize:11,color:"#555",marginBottom:16,textAlign:"center"}}>📅 Dernier export : <span style={{color:"#888",fontWeight:700}}>{lastExport}</span></div>}
         {!lastExport && <div style={{fontSize:11,color:"#ef4444",marginBottom:16,textAlign:"center",fontWeight:700}}>⚠️ Aucun export effectué — pense à backupper</div>}
 
