@@ -434,7 +434,7 @@ function computeStreak(sessions) {
         const gday = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"][g.getDay()];
         if (PROGRAM[gday] && PROGRAM[gday].training) { allRest = false; break; }
       }
-      if (allRest && diff <= 3) { streak++; check = sd; } else break;
+      if (allRest) { streak++; check = sd; } else break;
     }
   }
   return streak;
