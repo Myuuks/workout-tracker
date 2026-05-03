@@ -1,4 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
-  <rect width="192" height="192" rx="32" fill="#0c0c14"/>
-  <text x="96" y="130" font-size="110" text-anchor="middle" font-family="system-ui">💪</text>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#0c0c14"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="32" fill="url(#bg)"/>
+  <!-- Haltere : disque gauche + barre + disque droit -->
+  <g fill="#ffffff">
+    <!-- Disque gauche (poids interieur + exterieur) -->
+    <rect x="30" y="64" width="22" height="64" rx="6"/>
+    <rect x="20" y="76" width="14" height="40" rx="4"/>
+    <!-- Barre horizontale -->
+    <rect x="34" y="88" width="124" height="16" rx="4"/>
+    <!-- Disque droit -->
+    <rect x="140" y="64" width="22" height="64" rx="6"/>
+    <rect x="158" y="76" width="14" height="40" rx="4"/>
+  </g>
 </svg>
