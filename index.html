@@ -292,38 +292,41 @@ async function storeSet(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
-// ─── Backup cloud (Render + Google Sheet) ────────────────────────────────────
-// Renseigne ces 2 constantes apres deploiement du backend workout-tracker-api sur Render.
-// Si vides : la sync est silencieusement desactivee (l'app marche en local uniquement).
-const BACKEND_URL = ""; // ex: "https://workout-tracker-api.onrender.com"
-const BACKEND_TOKEN = ""; // doit matcher la variable d'env WORKOUT_TOKEN cote Render
+// ─── Backup cloud (Google Apps Script + Sheet) ───────────────────────────────
+// Backend = un Apps Script deploye en Web App (voir google-apps-script.gs).
+// Si BACKEND_URL est vide : sync silencieusement desactivee (l'app marche en local).
+// Note securite : le token sera visible cote client (PWA = code public). C'est juste
+// une protection anti-bot, pas une vraie auth. Suffisant pour usage perso.
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbycsUkPNigYfktMqtdbESZRtAeLkO9Afm9czuTCR11PNbLe3hV4oOdA-coY3v89b32a/exec";
+const BACKEND_TOKEN = "X1tn0c3PU5lNjIzvpnZqrWDiQAh6rKJe/hX18PbcwjI=";
 
-function syncToBackend(path, payload) {
-  if (!BACKEND_URL || !BACKEND_TOKEN) return;
-  fetch(BACKEND_URL + path, {
+// text/plain pour eviter le CORS preflight (Apps Script ne le gere pas bien)
+function postSync(action, payload) {
+  return fetch(BACKEND_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Workout-Token": BACKEND_TOKEN },
-    body: JSON.stringify(payload),
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action, token: BACKEND_TOKEN, payload }),
     keepalive: true,
-  }).catch(() => {
+  });
+}
+
+function syncToBackend(action, payload) {
+  if (!BACKEND_URL) return;
+  postSync(action, payload).catch(() => {
     const queue = JSON.parse(localStorage.getItem("wt_syncQueue") || "[]");
-    queue.push({ path, payload, ts: Date.now() });
-    localStorage.setItem("wt_syncQueue", JSON.stringify(queue.slice(-100))); // cap a 100 items
+    queue.push({ action, payload, ts: Date.now() });
+    localStorage.setItem("wt_syncQueue", JSON.stringify(queue.slice(-100)));
   });
 }
 
 async function drainSyncQueue() {
-  if (!BACKEND_URL || !BACKEND_TOKEN) return;
+  if (!BACKEND_URL) return;
   const queue = JSON.parse(localStorage.getItem("wt_syncQueue") || "[]");
   if (!queue.length) return;
   const remaining = [];
   for (const item of queue) {
     try {
-      const res = await fetch(BACKEND_URL + item.path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Workout-Token": BACKEND_TOKEN },
-        body: JSON.stringify(item.payload),
-      });
+      const res = await postSync(item.action, item.payload);
       if (!res.ok) remaining.push(item);
     } catch { remaining.push(item); }
   }
@@ -984,7 +987,7 @@ function WorkoutTracker() {
     <div style={{minHeight:"100vh",background:"#0c0c14",color:"#f0f0f0",fontFamily:"system-ui,-apple-system,sans-serif",paddingBottom:100,maxWidth:"100vw",overflow:"hidden",boxSizing:"border-box"}}>
 
       {state.timer && <RestTimer timer={state.timer} color={color} onClose={handleTimerClose} onPause={() => dispatch({type:"PAUSE_TIMER"})}/>}
-      {weightModal && <WeightModal color={color} lastWeight={lastBW} onSave={v => { dispatch({type:"SAVE_BW",val:v}); setWeightModal(false); syncToBackend("/sync/weight", { date: todayStr(), kg: v }); }} onClose={() => setWeightModal(false)}/>}
+      {weightModal && <WeightModal color={color} lastWeight={lastBW} onSave={v => { dispatch({type:"SAVE_BW",val:v}); setWeightModal(false); syncToBackend("weight", { date: todayStr(), kg: v }); }} onClose={() => setWeightModal(false)}/>}
       {tipsTarget && <FormTipsModal exName={tipsTarget.name} color={color} onClose={() => setTipsTarget(null)}/>}
       {state.confirm && <ConfirmModal onConfirm={execConfirm} onCancel={() => dispatch({type:"SET_CONFIRM",confirm:null})}/>}
       {dataModal && <DataModal state={state} dispatch={dispatch} onClose={() => setDataModal(false)}/>}
@@ -1107,7 +1110,7 @@ function WorkoutTracker() {
                   };
                   dispatch({type:"LOG_SESSION", notes: sessionNote});
                   setSessionNote("");
-                  syncToBackend("/sync/session", sessPayload);
+                  syncToBackend("session", sessPayload);
                 }}
                 style={{width:"100%",padding:16,background:state.saved?"#10b981":color,border:"none",borderRadius:14,color:"#fff",fontFamily:"inherit",fontSize:16,fontWeight:800,cursor:"pointer",touchAction:"manipulation"}}>
                 {state.saved ? "✅ Séance enregistrée !" : "💾 Valider la séance"}
